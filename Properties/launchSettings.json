@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "RShiftTools": {
+      "commandName": "Project",
+      "commandLineArgs": "--install"
+    }
+  }
+}
