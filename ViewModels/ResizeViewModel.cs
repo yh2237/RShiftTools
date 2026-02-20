@@ -1,14 +1,11 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
-using System.Runtime.CompilerServices;
-using System.Windows;
 using RShiftTools.Models;
 using RShiftTools.Services;
 
 namespace RShiftTools.ViewModels;
 
-public class ResizeViewModel : INotifyPropertyChanged
+public class ResizeViewModel : BaseViewModel
 {
     public ObservableCollection<MediaFile> Files { get; } = [];
     public ObservableCollection<string> Presets { get; } = ["カスタム", "4K (3840×2160)", "1080p (1920×1080)", "720p (1280×720)", "480p (854×480)", "50%", "25%"];
@@ -23,6 +20,7 @@ public class ResizeViewModel : INotifyPropertyChanged
             ApplyPreset(value);
         }
     }
+
     private int _width = 1920;
     public int Width
     {
@@ -34,9 +32,9 @@ public class ResizeViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             if (IsAspectLocked && _sourceWidth > 0)
             {
-                _height = (int)Math.Round(value * _sourceAspect == 0
-                    ? value
-                    : value / _sourceAspect);
+                _height = _sourceAspect > 0
+                    ? (int)Math.Round(value / _sourceAspect)
+                    : value;
                 OnPropertyChanged(nameof(Height));
             }
         }
@@ -53,9 +51,9 @@ public class ResizeViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             if (IsAspectLocked && _sourceHeight > 0)
             {
-                _width = (int)Math.Round(_sourceAspect == 0
-                    ? value
-                    : value * _sourceAspect);
+                _width = _sourceAspect > 0
+                    ? (int)Math.Round(value * _sourceAspect)
+                    : value;
                 OnPropertyChanged(nameof(Width));
             }
         }
@@ -83,7 +81,7 @@ public class ResizeViewModel : INotifyPropertyChanged
         set { _totalProgress = value; OnPropertyChanged(); }
     }
 
-    private string _statusText = "待機中";
+    private string _statusText = AppStrings.Status_Waiting;
     public string StatusText
     {
         get => _statusText;
@@ -102,12 +100,15 @@ public class ResizeViewModel : INotifyPropertyChanged
 
     private int _sourceWidth;
     private int _sourceHeight;
-    private double _sourceAspect => _sourceHeight == 0 ? 1 : (double)_sourceWidth / _sourceHeight;
+    private double _sourceAspect => _sourceHeight == 0 ? 1.0 : (double)_sourceWidth / _sourceHeight;
 
     private static readonly HashSet<string> ImageExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".avif"];
 
-    public ResizeViewModel(List<string> filePaths)
+    private readonly IDialogService _dialogService;
+
+    public ResizeViewModel(List<string> filePaths, IDialogService dialogService)
     {
+        _dialogService = dialogService;
         foreach (var path in filePaths)
             Files.Add(new MediaFile { FilePath = path });
     }
@@ -182,29 +183,25 @@ public class ResizeViewModel : INotifyPropertyChanged
             {
                 var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath);
                 var duration = info?.DurationSeconds ?? 0;
-                var isImage = ImageExts.Contains(
-                    Path.GetExtension(file.FilePath).ToLowerInvariant());
+                var isImage = ImageExts.Contains(Path.GetExtension(file.FilePath).ToLowerInvariant());
 
                 var vfFilter = BuildVfFilter(Width, Height, FitMode);
                 var ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
 
-                var rawOutput = Path.Combine(
-                    Path.GetDirectoryName(file.FilePath)!,
-                    Path.GetFileNameWithoutExtension(file.FilePath) + ext);
-
-                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => DialogService.AskOutputPath(file.FilePath, ext));
+                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                    () => _dialogService.AskOutputPath(file.FilePath, ext));
 
                 if (outputPath == null)
                 {
                     file.Status = ProcessStatus.Error;
-                    file.ErrorMessage = "キャンセルされました";
+                    file.ErrorMessage = AppStrings.Error_Cancelled;
                     done++;
                     continue;
                 }
 
-                var args = isImage
-                    ? $"-i \"{file.FilePath}\" -vf \"{vfFilter}\" \"{outputPath}\""
-                    : $"-i \"{file.FilePath}\" -vf \"{vfFilter}\" -c:a copy \"{outputPath}\"";
+                var argsList = isImage
+                    ? new List<string> { "-i", file.FilePath, "-vf", vfFilter, outputPath }
+                    : new List<string> { "-i", file.FilePath, "-vf", vfFilter, "-c:a", "copy", outputPath };
 
                 var progress = new Progress<FfmpegProgress>(p =>
                 {
@@ -212,14 +209,14 @@ public class ResizeViewModel : INotifyPropertyChanged
                     TotalProgress = (done + p.Percent) / Files.Count * 100;
                 });
 
-                var (success, error) = await App.Ffmpeg.RunAsync(args, duration, progress, token);
+                var (success, error) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
                 file.Status = success ? ProcessStatus.Done : ProcessStatus.Error;
-                if (!success) file.ErrorMessage = $"ffmpeg がエラーを返しました:\n{error}";
+                if (!success) file.ErrorMessage = $"{AppStrings.Error_FfmpegFailed}\n{error}";
             }
             catch (OperationCanceledException)
             {
                 file.Status = ProcessStatus.Error;
-                file.ErrorMessage = "キャンセルされました";
+                file.ErrorMessage = AppStrings.Error_Cancelled;
                 break;
             }
             catch (Exception ex)
@@ -232,7 +229,9 @@ public class ResizeViewModel : INotifyPropertyChanged
             TotalProgress = (double)done / Files.Count * 100;
         }
 
-        StatusText = $"完了: {Files.Count(f => f.Status == ProcessStatus.Done)} 件成功  /  {Files.Count(f => f.Status == ProcessStatus.Error)} 件失敗";
+        StatusText = string.Format(AppStrings.Status_CompleteFormat,
+            Files.Count(f => f.Status == ProcessStatus.Done),
+            Files.Count(f => f.Status == ProcessStatus.Error));
         IsRunning = false;
     }
 
@@ -247,8 +246,4 @@ public class ResizeViewModel : INotifyPropertyChanged
         _ => // fit（letterbox）
             $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
     };
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    protected void OnPropertyChanged([CallerMemberName] string? name = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

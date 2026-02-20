@@ -5,25 +5,25 @@ namespace RShiftTools.Services;
 
 public static class RegistryService
 {
-    private const string AppName = "RShiftTools";
-    private const string ExeName = "rshiftt.exe";
-
-    public static void Register(string installDir)
+    public static void Register(string installDir, bool allUsers = false)
     {
-        var exePath = Path.Combine(installDir, ExeName);
+        var exePath = Path.Combine(installDir, AppStrings.ExeName);
 
-        using var rootKey = Registry.ClassesRoot.CreateSubKey($@"*\shell\{AppName}");
-        rootKey.SetValue("MUIVerb", AppName);
+        var baseRoot = allUsers ? Registry.ClassesRoot : Registry.CurrentUser;
+        var basePath = allUsers ? $@"*\shell\{AppStrings.AppName}" : $@"Software\Classes\*\shell\{AppStrings.AppName}";
+
+        using var rootKey = baseRoot.CreateSubKey(basePath);
+        rootKey.SetValue("MUIVerb", AppStrings.MUIVerb);
         rootKey.SetValue("SubCommands", "");
 
         using var shellKey = rootKey.CreateSubKey("shell");
 
         var modes = new (string mode, string label)[]
         {
-        ("convert",  "変換..."),
-        ("resize",   "リサイズ..."),
-        ("cut",      "カット..."),
-        ("compress", "サイズ圧縮..."),
+            ("convert",  "変換..."),
+            ("resize",   "リサイズ..."),
+            ("cut",      "カット..."),
+            ("compress", "サイズ圧縮..."),
         };
 
         foreach (var (mode, label) in modes)
@@ -35,11 +35,18 @@ public static class RegistryService
         }
     }
 
-    public static void Unregister()
+    public static void Unregister(bool allUsers = false)
     {
         try
         {
-            Registry.ClassesRoot.DeleteSubKeyTree($@"*\shell\{AppName}", throwOnMissingSubKey: false);
+            if (allUsers)
+            {
+                Registry.ClassesRoot.DeleteSubKeyTree($@"*\shell\{AppStrings.AppName}", throwOnMissingSubKey: false);
+            }
+            else
+            {
+                Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\*\shell\{AppStrings.AppName}", throwOnMissingSubKey: false);
+            }
         }
         catch { }
     }

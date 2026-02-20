@@ -1,14 +1,11 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
-using System.Runtime.CompilerServices;
-using System.Windows;
 using RShiftTools.Models;
 using RShiftTools.Services;
 
 namespace RShiftTools.ViewModels;
 
-public class CompressViewModel : INotifyPropertyChanged
+public class CompressViewModel : BaseViewModel
 {
     public ObservableCollection<MediaFile> Files { get; } = [];
     private double _targetSizeMb = 50;
@@ -20,23 +17,21 @@ public class CompressViewModel : INotifyPropertyChanged
     public ObservableCollection<string> AudioQualities { get; } = ["低 (96kbps)", "中 (128kbps)", "高 (192kbps)", "コピー"];
 
     public ObservableCollection<string> HwEncoders { get; } = ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
-    private string _hwEncoder = "自動 (CPU)";
-
+    private string _hwEncoder = UserSettings.HwEncoder;
     public string HwEncoder
     {
         get => _hwEncoder;
-        set { _hwEncoder = value; OnPropertyChanged(); }
+        set { _hwEncoder = value; OnPropertyChanged(); UserSettings.HwEncoder = value; }
     }
 
     private string _audioQuality = "中 (128kbps)";
-
     public string AudioQuality
     {
         get => _audioQuality;
         set { _audioQuality = value; OnPropertyChanged(); UpdateEstimate(); }
     }
-    private string _estimateText = "";
 
+    private string _estimateText = "";
     public string EstimateText
     {
         get => _estimateText;
@@ -44,15 +39,13 @@ public class CompressViewModel : INotifyPropertyChanged
     }
 
     private double _totalProgress;
-
     public double TotalProgress
     {
         get => _totalProgress;
         set { _totalProgress = value; OnPropertyChanged(); }
     }
 
-    private string _statusText = "待機中";
-
+    private string _statusText = AppStrings.Status_Waiting;
     public string StatusText
     {
         get => _statusText;
@@ -60,7 +53,6 @@ public class CompressViewModel : INotifyPropertyChanged
     }
 
     private bool _isRunning;
-
     public bool IsRunning
     {
         get => _isRunning;
@@ -71,9 +63,11 @@ public class CompressViewModel : INotifyPropertyChanged
     private CancellationTokenSource? _cts;
 
     private readonly Dictionary<string, double> _durationCache = [];
+    private readonly IDialogService _dialogService;
 
-    public CompressViewModel(List<string> filePaths)
+    public CompressViewModel(List<string> filePaths, IDialogService dialogService)
     {
+        _dialogService = dialogService;
         foreach (var path in filePaths)
             Files.Add(new MediaFile { FilePath = path });
     }
@@ -100,7 +94,6 @@ public class CompressViewModel : INotifyPropertyChanged
         {
             "低 (96kbps)" => 96,
             "高 (192kbps)" => 192,
-            "コピー" => 128,
             _ => 128,
         };
 
@@ -172,18 +165,18 @@ public class CompressViewModel : INotifyPropertyChanged
 
                 var ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
 
-                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => DialogService.AskOutputPath(file.FilePath, ext));
+                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                    () => _dialogService.AskOutputPath(file.FilePath, ext));
 
                 if (outputPath == null)
                 {
                     file.Status = ProcessStatus.Error;
-                    file.ErrorMessage = "キャンセルされました";
+                    file.ErrorMessage = AppStrings.Error_Cancelled;
                     done++;
                     continue;
                 }
 
                 var videoCodec = _hwEncoder switch
-
                 {
                     "NVIDIA (nvenc)" => "h264_nvenc",
                     "AMD (amf)" => "h264_amf",
@@ -191,15 +184,20 @@ public class CompressViewModel : INotifyPropertyChanged
                     _ => "libx264",
                 };
 
-
-                var pass1Args = $"-y -i \"{file.FilePath}\" -c:v {videoCodec} -b:v {videoBitrateKbps}k -pass 1 -passlogfile \"{passLogFile}\" -an -f null NUL";
+                var pass1ArgsList = new List<string>
+                {
+                    "-y", "-i", file.FilePath,
+                    "-c:v", videoCodec, "-b:v", videoBitrateKbps + "k",
+                    "-pass", "1", "-passlogfile", passLogFile,
+                    "-an", "-f", "null", "NUL"
+                };
                 var progress1 = new Progress<FfmpegProgress>(p =>
                 {
                     file.Progress = p.Percent * 50;
                     TotalProgress = (done + p.Percent * 0.5) / Files.Count * 100;
                 });
 
-                var (success1, error1) = await App.Ffmpeg.RunAsync(pass1Args, duration, progress1, token);
+                var (success1, error1) = await App.Ffmpeg.RunAsync(pass1ArgsList, duration, progress1, token);
 
                 if (!success1)
                 {
@@ -210,27 +208,33 @@ public class CompressViewModel : INotifyPropertyChanged
 
                 StatusText = $"処理中: {file.FileName} (Pass 2/2)";
                 var audioArgs = AudioQuality == "コピー"
-                    ? "-c:a copy"
-                    : $"-b:a {audioBitrateKbps}k";
+                    ? new[] { "-c:a", "copy" }
+                    : new[] { "-b:a", $"{audioBitrateKbps}k" };
 
-                var pass2Args = $"-y -i \"{file.FilePath}\" -c:v {videoCodec} -b:v {videoBitrateKbps}k -pass 2 -passlogfile \"{passLogFile}\" {audioArgs} \"{outputPath}\"";
+                var pass2ArgsList = new List<string>
+                {
+                    "-y", "-i", file.FilePath,
+                    "-c:v", videoCodec, "-b:v", videoBitrateKbps + "k",
+                    "-pass", "2", "-passlogfile", passLogFile
+                };
+                pass2ArgsList.AddRange(audioArgs);
+                pass2ArgsList.Add(outputPath);
+
                 var progress2 = new Progress<FfmpegProgress>(p =>
                 {
                     file.Progress = 50 + p.Percent * 50;
                     TotalProgress = (done + 0.5 + p.Percent * 0.5) / Files.Count * 100;
                 });
 
-                var (success2, error2) = await App.Ffmpeg.RunAsync(pass2Args, duration, progress2, token);
+                var (success2, error2) = await App.Ffmpeg.RunAsync(pass2ArgsList, duration, progress2, token);
                 file.Status = success2 ? ProcessStatus.Done : ProcessStatus.Error;
                 if (!success2)
-                {
                     file.ErrorMessage = $"Pass 2 失敗:\n{error2}";
-                }
             }
             catch (OperationCanceledException)
             {
                 file.Status = ProcessStatus.Error;
-                file.ErrorMessage = "キャンセルされました";
+                file.ErrorMessage = AppStrings.Error_Cancelled;
                 break;
             }
             catch (Exception ex)
@@ -248,13 +252,11 @@ public class CompressViewModel : INotifyPropertyChanged
             TotalProgress = (double)done / Files.Count * 100;
         }
 
-        StatusText = $"完了: {Files.Count(f => f.Status == ProcessStatus.Done)} 件成功  /  {Files.Count(f => f.Status == ProcessStatus.Error)} 件失敗";
+        StatusText = string.Format(AppStrings.Status_CompleteFormat,
+            Files.Count(f => f.Status == ProcessStatus.Done),
+            Files.Count(f => f.Status == ProcessStatus.Error));
         IsRunning = false;
     }
 
     public void Cancel() => _cts?.Cancel();
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-    protected void OnPropertyChanged([CallerMemberName] string? name = null)
-        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

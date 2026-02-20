@@ -2,7 +2,7 @@
     x:Class="RShiftTools.Views.ConvertDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="clr-namespace:RShiftTools.Views"
+    xmlns:converters="clr-namespace:RShiftTools.Converters"
     Title="変換 - RShiftTools"
     Width="580"
     Height="540"
@@ -10,7 +10,7 @@
     WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
-        <local:StatusConverter x:Key="StatusConverter" />
+        <converters:StatusConverter x:Key="StatusConverter" />
         <Style x:Key="StatusTextStyle" TargetType="TextBlock">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Status}" Value="Done">

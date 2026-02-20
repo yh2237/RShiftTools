@@ -1,0 +1,319 @@
+<Window
+    x:Class="RShiftTools.Views.CutDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="カット - RShiftTools"
+    Width="720"
+    Height="600"
+    ResizeMode="CanMinimize"
+    WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border
+            Grid.Row="0"
+            Margin="0,0,0,6"
+            BorderBrush="#DDD"
+            BorderThickness="1">
+            <Grid Background="Black">
+                <MediaElement
+                    x:Name="MediaPlayer"
+                    LoadedBehavior="Manual"
+                    MediaEnded="MediaPlayer_MediaEnded"
+                    MediaOpened="MediaPlayer_MediaOpened"
+                    ScrubbingEnabled="True"
+                    Stretch="Uniform"
+                    UnloadedBehavior="Stop" />
+                <TextBlock
+                    x:Name="PreviewUnavailableMsg"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    Foreground="#AAA"
+                    Text="このファイル形式はプレビューに対応していません"
+                    Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="0,0,0,2">
+            <Slider
+                x:Name="SeekSlider"
+                IsMoveToPointEnabled="False"
+                Maximum="{Binding TotalSeconds}"
+                Minimum="0"
+                MouseLeave="SeekSlider_MouseLeave"
+                PreviewMouseDown="SeekSlider_PreviewMouseDown"
+                PreviewMouseMove="SeekSlider_PreviewMouseMove"
+                PreviewMouseUp="SeekSlider_PreviewMouseUp"
+                Value="{Binding CurrentSeconds, Mode=OneWay}" />
+
+            <Canvas x:Name="MarkerCanvas" IsHitTestVisible="False">
+                <Rectangle
+                    x:Name="InMarker"
+                    Canvas.Bottom="0"
+                    Width="3"
+                    Height="22"
+                    Fill="#00cc66"
+                    Opacity="0.85" />
+                <Rectangle
+                    x:Name="OutMarker"
+                    Canvas.Bottom="0"
+                    Width="3"
+                    Height="22"
+                    Fill="#cc3300"
+                    Opacity="0.85" />
+            </Canvas>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="110" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                Grid.Column="0"
+                Margin="0,0,6,0"
+                VerticalAlignment="Center"
+                Text="現在位置：" />
+            <TextBox
+                x:Name="CurrentTimeTextBox"
+                Grid.Column="1"
+                Width="140"
+                FontFamily="Consolas"
+                KeyDown="CurrentTimeTextBox_KeyDown"
+                Text="{Binding CurrentTimeText, UpdateSourceTrigger=LostFocus}" />
+
+            <TextBlock
+                Grid.Column="3"
+                Margin="0,0,6,0"
+                VerticalAlignment="Center"
+                FontSize="16"
+                Text="{Binding VolumeIcon}" />
+            <Slider
+                x:Name="VolumeSlider"
+                Grid.Column="4"
+                VerticalAlignment="Center"
+                IsMoveToPointEnabled="True"
+                Maximum="100"
+                Minimum="0"
+                ToolTip="音量"
+                Value="{Binding Volume, Mode=TwoWay}" />
+            <TextBlock
+                Grid.Column="5"
+                Width="32"
+                Margin="6,0,0,0"
+                VerticalAlignment="Center"
+                Text="{Binding VolumeText}" />
+        </Grid>
+
+        <!--  ===== 再生コントロール =====  -->
+        <Grid Grid.Row="3" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button
+                    Width="34"
+                    Height="28"
+                    Margin="2,0"
+                    Click="ToStart_Click"
+                    Content="⏮"
+                    ToolTip="先頭へ" />
+                <Button
+                    Width="48"
+                    Height="28"
+                    Margin="2,0"
+                    Click="PlayPause_Click"
+                    Content="{Binding PlayButtonText}"
+                    FontSize="16"
+                    ToolTip="再生/停止" />
+                <Button
+                    Width="34"
+                    Height="28"
+                    Margin="2,0"
+                    Click="ToEnd_Click"
+                    Content="⏭"
+                    ToolTip="末尾へ" />
+                <Separator Width="1" Margin="8,0" />
+                <TextBlock
+                    Margin="4,0,4,0"
+                    VerticalAlignment="Center"
+                    Text="速度：" />
+                <ComboBox
+                    Width="70"
+                    Height="26"
+                    VerticalContentAlignment="Center"
+                    ItemsSource="{Binding SpeedOptions}"
+                    SelectedItem="{Binding PlaybackSpeed}" />
+            </StackPanel>
+        </Grid>
+
+        <!--  ===== IN点 / OUT点 =====  -->
+        <Grid Grid.Row="4" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                Grid.Column="0"
+                Padding="10,8"
+                BorderBrush="#00cc66"
+                BorderThickness="1"
+                CornerRadius="3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock
+                        Grid.Row="0"
+                        Margin="0,0,0,4"
+                        FontWeight="Bold"
+                        Foreground="#00cc66"
+                        Text="IN 点" />
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            Grid.Column="0"
+                            Margin="0,0,6,0"
+                            FontFamily="Consolas"
+                            KeyDown="TimeTextBox_KeyDown"
+                            Text="{Binding InPointText, UpdateSourceTrigger=LostFocus}" />
+                        <Button
+                            Grid.Column="1"
+                            Padding="8,4"
+                            Click="SetIn_Click"
+                            Content="現在位置をセット" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Column="2"
+                Padding="10,8"
+                BorderBrush="#cc3300"
+                BorderThickness="1"
+                CornerRadius="3">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock
+                        Grid.Row="0"
+                        Margin="0,0,0,4"
+                        FontWeight="Bold"
+                        Foreground="#cc3300"
+                        Text="OUT 点" />
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            Grid.Column="0"
+                            Margin="0,0,6,0"
+                            FontFamily="Consolas"
+                            KeyDown="TimeTextBox_KeyDown"
+                            Text="{Binding OutPointText, UpdateSourceTrigger=LostFocus}" />
+                        <Button
+                            Grid.Column="1"
+                            Padding="8,4"
+                            Click="SetOut_Click"
+                            Content="現在位置をセット" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border
+            Grid.Row="5"
+            Margin="0,0,0,6"
+            Padding="10,8"
+            BorderBrush="#DDD"
+            BorderThickness="1"
+            CornerRadius="3">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="140" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Text="{Binding CrfLabel}" />
+                <Slider
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    IsSnapToTickEnabled="True"
+                    Maximum="51"
+                    Minimum="0"
+                    TickFrequency="1"
+                    Value="{Binding Crf}" />
+                <TextBlock
+                    Grid.Column="2"
+                    Margin="12,0,10,0"
+                    VerticalAlignment="Center"
+                    Text="ハードウェア：" />
+                <ComboBox
+                    Grid.Column="3"
+                    VerticalAlignment="Center"
+                    ItemsSource="{Binding HwEncoders}"
+                    SelectedItem="{Binding HwEncoder}" />
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="6" Margin="0,0,0,6">
+            <ProgressBar
+                Height="16"
+                Margin="0,0,0,3"
+                Maximum="100"
+                Value="{Binding Progress}" />
+            <TextBlock Foreground="#555" Text="{Binding StatusText}" />
+        </StackPanel>
+
+        <StackPanel
+            Grid.Row="7"
+            HorizontalAlignment="Right"
+            Orientation="Horizontal">
+            <Button
+                Width="90"
+                Height="28"
+                Margin="0,0,8,0"
+                Click="CancelButton_Click"
+                Content="キャンセル" />
+            <Button
+                Width="90"
+                Height="28"
+                Click="RunButton_Click"
+                Content="カット"
+                IsEnabled="{Binding CanRun}" />
+        </StackPanel>
+    </Grid>
+</Window>

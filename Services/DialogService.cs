@@ -3,9 +3,9 @@ using System.IO;
 
 namespace RShiftTools.Services;
 
-public static class DialogService
+public class DialogService : IDialogService
 {
-    public static string? AskOutputPath(string inputPath, string outputExt)
+    public string? AskOutputPath(string inputPath, string outputExt)
     {
         var dir = Path.GetDirectoryName(inputPath) ?? "";
         var nameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);

@@ -1,4 +1,5 @@
 using System.Windows;
+using RShiftTools.Services;
 using RShiftTools.ViewModels;
 
 namespace RShiftTools.Views;
@@ -10,7 +11,7 @@ public partial class ResizeDialog : Window
     public ResizeDialog(List<string> files)
     {
         InitializeComponent();
-        _vm = new ResizeViewModel(files);
+        _vm = new ResizeViewModel(files, new DialogService());
         DataContext = _vm;
     }
 
@@ -21,12 +22,8 @@ public partial class ResizeDialog : Window
     }
 
     private async void RunButton_Click(object sender, RoutedEventArgs e)
-    {
-        await _vm.RunAsync();
-    }
+        => await _vm.RunAsync();
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
-    {
-        _vm.Cancel();
-    }
+        => _vm.Cancel();
 }

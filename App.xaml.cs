@@ -16,8 +16,8 @@ public partial class App : Application
         base.OnStartup(e);
 
         var exeDir = AppContext.BaseDirectory;
-        FfmpegPath = Path.Combine(exeDir, "ffmpeg.exe");
-        FfprobePath = Path.Combine(exeDir, "ffprobe.exe");
+        FfmpegPath = Path.Combine(exeDir, AppStrings.FfmpegExe);
+        FfprobePath = Path.Combine(exeDir, AppStrings.FfprobeExe);
 
         Ffmpeg = new FfmpegService(FfmpegPath);
         Ffprobe = new FfprobeService(FfprobePath);
@@ -30,24 +30,27 @@ public partial class App : Application
         {
             try
             {
-                RegistryService.Register(AppContext.BaseDirectory);
-                MessageBox.Show("右クリックメニューへの登録が完了しました。",
-                    "RShiftTools", MessageBoxButton.OK, MessageBoxImage.Information);
+                var allUsers = args.Contains("--allusers");
+                RegistryService.Register(AppContext.BaseDirectory, allUsers: allUsers);
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"登録に失敗しました。\n{ex.Message}",
-                    "RShiftTools", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            catch { }
             Shutdown(0);
             return;
         }
 
         if (args.Contains("--uninstall"))
         {
+            if (args.Contains("--allusers"))
+            {
+                try { RegistryService.Unregister(allUsers: true); } catch { }
+                Shutdown(0);
+                return;
+            }
+
             try
             {
-                RegistryService.Unregister();
+                var allUsers = args.Contains("--allusers");
+                RegistryService.Unregister(allUsers: allUsers);
             }
             catch { }
             Shutdown(0);
@@ -57,16 +60,16 @@ public partial class App : Application
         if (!File.Exists(FfmpegPath) || !File.Exists(FfprobePath))
         {
             MessageBox.Show(
-                "ffmpeg.exe / ffprobe.exe が見つかりません。\nexe と同じフォルダに配置してください。",
-                "RShiftTools", MessageBoxButton.OK, MessageBoxImage.Error);
+                            AppStrings.Error_FfmpegMissing,
+                            AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
             return;
         }
 
         if (files.Count == 0 && mode != null)
         {
-            MessageBox.Show("ファイルが指定されていません。", "RShiftTools",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(AppStrings.Error_FileNotSpecified, AppStrings.AppName,
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
             Shutdown(1);
             return;
         }
@@ -75,20 +78,27 @@ public partial class App : Application
         {
             "convert" => new Views.ConvertDialog(files),
             "resize" => new Views.ResizeDialog(files),
-            "cut" => null, // new Views.CutDialog(files[0]),
+            "cut" => new Views.CutDialog(files),
             "compress" => new Views.CompressDialog(files),
             _ => null, // 設定画面（未実装）
         };
 
         if (window == null)
         {
-            MessageBox.Show($"モード '{mode}' は未実装です。", "RShiftTools",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(string.Format(AppStrings.Error_ModeNotImplemented, mode), AppStrings.AppName,
+                            MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown(0);
             return;
         }
 
-        window.Show();
+        try
+        {
+            window.Show();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(string.Format(AppStrings.Error_WindowStartupFailed, ex.Message, ex.StackTrace), "エラー");
+        }
     }
 
     private static string? GetArg(string[] args, string key)

@@ -1,5 +1,7 @@
-namespace RShiftTools.Models;
 using System.IO;
+
+namespace RShiftTools.Models;
+
 public class MediaFile
 {
     public string FilePath { get; init; } = "";

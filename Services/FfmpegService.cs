@@ -1,17 +1,11 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using System.IO;
+using System.Text.RegularExpressions;
+using RShiftTools.Models;
 
 namespace RShiftTools.Services;
 
-public class FfmpegProgress
-{
-    public double Percent { get; init; }
-    public TimeSpan CurrentTime { get; init; }
-    public string RawLine { get; init; } = "";
-}
-
-public class FfmpegService
+public class FfmpegService : IFfmpegService
 {
     private readonly string _ffmpegPath;
     private static readonly Regex TimeRegex =
@@ -23,68 +17,75 @@ public class FfmpegService
     }
 
     public async Task<(bool Success, string ErrorLog)> RunAsync(
-    string arguments,
-    double totalDurationSeconds,
-    IProgress<FfmpegProgress>? onProgress = null,
-    CancellationToken cancellationToken = default)
+        string arguments,
+        double totalDurationSeconds,
+        IProgress<FfmpegProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
     {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = _ffmpegPath,
-                Arguments = arguments,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(_ffmpegPath) ?? "",
-            }
-        };
+        var argList = ProcessHelper.SplitCommandLinePublic(arguments);
+        return await RunAsync(argList, totalDurationSeconds, onProgress, cancellationToken);
+    }
 
-        var ffmpegDir = Path.GetDirectoryName(_ffmpegPath) ?? "";
-        process.StartInfo.Environment["PATH"] = ffmpegDir + ";" + Environment.GetEnvironmentVariable("PATH");
+    public async Task<(bool Success, string ErrorLog)> RunAsync(
+        IEnumerable<string> arguments,
+        double totalDurationSeconds,
+        IProgress<FfmpegProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var joined = string.Join(' ', arguments);
+        Log.Debug($"Starting ffmpeg: {_ffmpegPath} {joined}");
+        using var process = ProcessHelper.StartProcess(_ffmpegPath, arguments, redirectStdOut: false, redirectStdErr: true);
 
         var errorLines = new System.Text.StringBuilder();
 
-        process.Start();
-
         var readTask = Task.Run(async () =>
         {
-            while (!process.StandardError.EndOfStream)
+            try
             {
-                var line = await process.StandardError.ReadLineAsync(cancellationToken);
-                if (line == null) break;
-
-                errorLines.AppendLine(line);
-
-                var match = TimeRegex.Match(line);
-                if (match.Success && totalDurationSeconds > 0)
+                while (!process.StandardError.EndOfStream)
                 {
-                    var h = int.Parse(match.Groups[1].Value);
-                    var m = int.Parse(match.Groups[2].Value);
-                    var s = int.Parse(match.Groups[3].Value);
-                    var cs = int.Parse(match.Groups[4].Value);
-                    var current = new TimeSpan(0, h, m, s, cs * 10);
-                    var percent = Math.Min(current.TotalSeconds / totalDurationSeconds, 1.0);
+                    var line = await process.StandardError.ReadLineAsync(cancellationToken);
+                    if (line == null) break;
 
-                    onProgress?.Report(new FfmpegProgress
+                    errorLines.AppendLine(line);
+
+                    var match = TimeRegex.Match(line);
+                    if (match.Success && totalDurationSeconds > 0)
                     {
-                        Percent = percent,
-                        CurrentTime = current,
-                        RawLine = line,
-                    });
+                        if (!int.TryParse(match.Groups[1].Value, out var h)) h = 0;
+                        if (!int.TryParse(match.Groups[2].Value, out var m)) m = 0;
+                        if (!int.TryParse(match.Groups[3].Value, out var s)) s = 0;
+                        if (!int.TryParse(match.Groups[4].Value, out var cs)) cs = 0;
+                        var current = new TimeSpan(0, h, m, s, cs * 10);
+                        var percent = Math.Min(current.TotalSeconds / totalDurationSeconds, 1.0);
+
+                        onProgress?.Report(new FfmpegProgress
+                        {
+                            Percent = percent,
+                            CurrentTime = current,
+                            RawLine = line,
+                        });
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error reading ffmpeg stderr: {ex.Message}");
             }
         }, cancellationToken);
 
         await using var reg = cancellationToken.Register(() =>
         {
-            try { process.Kill(); } catch { }
+            try { process.Kill(); } catch (Exception ex) { Log.Error($"Failed to kill ffmpeg process: {ex.Message}"); }
         });
 
         await readTask;
         await process.WaitForExitAsync(cancellationToken);
 
+        if (process.ExitCode != 0)
+        {
+            Log.Error($"ffmpeg exit code={process.ExitCode} stderr={errorLines}");
+        }
         return (process.ExitCode == 0, errorLines.ToString());
     }
 
