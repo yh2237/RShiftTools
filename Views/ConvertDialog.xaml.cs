@@ -1,4 +1,3 @@
-
 using System.Windows;
 using RShiftTools.Services;
 using RShiftTools.ViewModels;
@@ -16,9 +15,7 @@ public partial class ConvertDialog : Window
         DataContext = _vm;
     }
 
-    private async void RunButton_Click(object sender, RoutedEventArgs e)
-        => await _vm.RunAsync();
+    private async void RunButton_Click(object sender, RoutedEventArgs e) => await _vm.RunAsync();
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-        => _vm.Cancel();
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => _vm.Cancel();
 }

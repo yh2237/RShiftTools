@@ -12,51 +12,85 @@ public class CompressViewModel : BaseViewModel
     public double TargetSizeMb
     {
         get => _targetSizeMb;
-        set { _targetSizeMb = value; OnPropertyChanged(); UpdateEstimate(); }
+        set
+        {
+            _targetSizeMb = value;
+            OnPropertyChanged();
+            UpdateEstimate();
+        }
     }
-    public ObservableCollection<string> AudioQualities { get; } = ["低 (96kbps)", "中 (128kbps)", "高 (192kbps)", "コピー"];
+    public ObservableCollection<string> AudioQualities { get; } =
+    ["低 (96kbps)", "中 (128kbps)", "高 (192kbps)", "コピー"];
 
-    public ObservableCollection<string> HwEncoders { get; } = ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
+    public ObservableCollection<string> HwEncoders { get; } =
+    ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
     private string _hwEncoder = UserSettings.HwEncoder;
     public string HwEncoder
     {
         get => _hwEncoder;
-        set { _hwEncoder = value; OnPropertyChanged(); UserSettings.HwEncoder = value; }
+        set
+        {
+            _hwEncoder = value;
+            OnPropertyChanged();
+            UserSettings.HwEncoder = value;
+        }
     }
 
     private string _audioQuality = "中 (128kbps)";
     public string AudioQuality
     {
         get => _audioQuality;
-        set { _audioQuality = value; OnPropertyChanged(); UpdateEstimate(); }
+        set
+        {
+            _audioQuality = value;
+            OnPropertyChanged();
+            UpdateEstimate();
+        }
     }
 
     private string _estimateText = "";
     public string EstimateText
     {
         get => _estimateText;
-        set { _estimateText = value; OnPropertyChanged(); }
+        set
+        {
+            _estimateText = value;
+            OnPropertyChanged();
+        }
     }
 
     private double _totalProgress;
     public double TotalProgress
     {
         get => _totalProgress;
-        set { _totalProgress = value; OnPropertyChanged(); }
+        set
+        {
+            _totalProgress = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _statusText = AppStrings.Status_Waiting;
     public string StatusText
     {
         get => _statusText;
-        set { _statusText = value; OnPropertyChanged(); }
+        set
+        {
+            _statusText = value;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isRunning;
     public bool IsRunning
     {
         get => _isRunning;
-        set { _isRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRun)); }
+        set
+        {
+            _isRunning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRun));
+        }
     }
     public bool CanRun => !_isRunning && Files.Count > 0;
 
@@ -118,14 +152,16 @@ public class CompressViewModel : BaseViewModel
 
         foreach (var file in Files)
         {
-            if (token.IsCancellationRequested) break;
+            if (token.IsCancellationRequested)
+                break;
 
             file.Status = ProcessStatus.Processing;
             StatusText = $"処理中: {file.FileName} (Pass 1/2)";
 
             var passLogFile = Path.Combine(
-                Path.GetDirectoryName(file.FilePath)!,
-                Path.GetFileNameWithoutExtension(file.FilePath) + "_2pass")
+                    Path.GetDirectoryName(file.FilePath)!,
+                    Path.GetFileNameWithoutExtension(file.FilePath) + "_2pass"
+                )
                 .Replace('\\', '/');
 
             try
@@ -166,7 +202,9 @@ public class CompressViewModel : BaseViewModel
                 var ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
 
                 var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
-                    () => _dialogService.AskOutputPath(file.FilePath, ext));
+                    () =>
+                        _dialogService.AskOutputPath(file.FilePath, ext)
+                );
 
                 if (outputPath == null)
                 {
@@ -186,10 +224,21 @@ public class CompressViewModel : BaseViewModel
 
                 var pass1ArgsList = new List<string>
                 {
-                    "-y", "-i", file.FilePath,
-                    "-c:v", videoCodec, "-b:v", videoBitrateKbps + "k",
-                    "-pass", "1", "-passlogfile", passLogFile,
-                    "-an", "-f", "null", "NUL"
+                    "-y",
+                    "-i",
+                    file.FilePath,
+                    "-c:v",
+                    videoCodec,
+                    "-b:v",
+                    videoBitrateKbps + "k",
+                    "-pass",
+                    "1",
+                    "-passlogfile",
+                    passLogFile,
+                    "-an",
+                    "-f",
+                    "null",
+                    "NUL",
                 };
                 var progress1 = new Progress<FfmpegProgress>(p =>
                 {
@@ -197,7 +246,12 @@ public class CompressViewModel : BaseViewModel
                     TotalProgress = (done + p.Percent * 0.5) / Files.Count * 100;
                 });
 
-                var (success1, error1) = await App.Ffmpeg.RunAsync(pass1ArgsList, duration, progress1, token);
+                var (success1, error1) = await App.Ffmpeg.RunAsync(
+                    pass1ArgsList,
+                    duration,
+                    progress1,
+                    token
+                );
 
                 if (!success1)
                 {
@@ -207,15 +261,24 @@ public class CompressViewModel : BaseViewModel
                 }
 
                 StatusText = $"処理中: {file.FileName} (Pass 2/2)";
-                var audioArgs = AudioQuality == "コピー"
-                    ? new[] { "-c:a", "copy" }
-                    : new[] { "-b:a", $"{audioBitrateKbps}k" };
+                var audioArgs =
+                    AudioQuality == "コピー"
+                        ? new[] { "-c:a", "copy" }
+                        : new[] { "-b:a", $"{audioBitrateKbps}k" };
 
                 var pass2ArgsList = new List<string>
                 {
-                    "-y", "-i", file.FilePath,
-                    "-c:v", videoCodec, "-b:v", videoBitrateKbps + "k",
-                    "-pass", "2", "-passlogfile", passLogFile
+                    "-y",
+                    "-i",
+                    file.FilePath,
+                    "-c:v",
+                    videoCodec,
+                    "-b:v",
+                    videoBitrateKbps + "k",
+                    "-pass",
+                    "2",
+                    "-passlogfile",
+                    passLogFile,
                 };
                 pass2ArgsList.AddRange(audioArgs);
                 pass2ArgsList.Add(outputPath);
@@ -226,7 +289,12 @@ public class CompressViewModel : BaseViewModel
                     TotalProgress = (done + 0.5 + p.Percent * 0.5) / Files.Count * 100;
                 });
 
-                var (success2, error2) = await App.Ffmpeg.RunAsync(pass2ArgsList, duration, progress2, token);
+                var (success2, error2) = await App.Ffmpeg.RunAsync(
+                    pass2ArgsList,
+                    duration,
+                    progress2,
+                    token
+                );
                 file.Status = success2 ? ProcessStatus.Done : ProcessStatus.Error;
                 if (!success2)
                     file.ErrorMessage = $"Pass 2 失敗:\n{error2}";
@@ -244,17 +312,27 @@ public class CompressViewModel : BaseViewModel
             }
             finally
             {
-                try { File.Delete(passLogFile + "-0.log"); } catch { }
-                try { File.Delete(passLogFile + "-0.log.mbtree"); } catch { }
+                try
+                {
+                    File.Delete(passLogFile + "-0.log");
+                }
+                catch { }
+                try
+                {
+                    File.Delete(passLogFile + "-0.log.mbtree");
+                }
+                catch { }
             }
 
             done++;
             TotalProgress = (double)done / Files.Count * 100;
         }
 
-        StatusText = string.Format(AppStrings.Status_CompleteFormat,
+        StatusText = string.Format(
+            AppStrings.Status_CompleteFormat,
             Files.Count(f => f.Status == ProcessStatus.Done),
-            Files.Count(f => f.Status == ProcessStatus.Error));
+            Files.Count(f => f.Status == ProcessStatus.Error)
+        );
         IsRunning = false;
     }
 

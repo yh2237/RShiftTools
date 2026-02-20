@@ -42,7 +42,11 @@ public partial class App : Application
         {
             if (args.Contains("--allusers"))
             {
-                try { RegistryService.Unregister(allUsers: true); } catch { }
+                try
+                {
+                    RegistryService.Unregister(allUsers: true);
+                }
+                catch { }
                 Shutdown(0);
                 return;
             }
@@ -60,16 +64,23 @@ public partial class App : Application
         if (!File.Exists(FfmpegPath) || !File.Exists(FfprobePath))
         {
             MessageBox.Show(
-                            AppStrings.Error_FfmpegMissing,
-                            AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
+                AppStrings.Error_FfmpegMissing,
+                AppStrings.AppName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
             Shutdown(1);
             return;
         }
 
         if (files.Count == 0 && mode != null)
         {
-            MessageBox.Show(AppStrings.Error_FileNotSpecified, AppStrings.AppName,
-                            MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(
+                AppStrings.Error_FileNotSpecified,
+                AppStrings.AppName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
             Shutdown(1);
             return;
         }
@@ -85,8 +96,12 @@ public partial class App : Application
 
         if (window == null)
         {
-            MessageBox.Show(string.Format(AppStrings.Error_ModeNotImplemented, mode), AppStrings.AppName,
-                            MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(
+                string.Format(AppStrings.Error_ModeNotImplemented, mode),
+                AppStrings.AppName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Information
+            );
             Shutdown(0);
             return;
         }
@@ -97,7 +112,10 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            MessageBox.Show(string.Format(AppStrings.Error_WindowStartupFailed, ex.Message, ex.StackTrace), "エラー");
+            MessageBox.Show(
+                string.Format(AppStrings.Error_WindowStartupFailed, ex.Message, ex.StackTrace),
+                "エラー"
+            );
         }
     }
 
@@ -111,12 +129,15 @@ public partial class App : Application
     {
         var files = new List<string>();
         var idx = Array.IndexOf(args, "--files");
-        if (idx < 0) return files;
+        if (idx < 0)
+            return files;
 
         for (var i = idx + 1; i < args.Length; i++)
         {
-            if (args[i].StartsWith("--")) break;
-            if (File.Exists(args[i])) files.Add(args[i]);
+            if (args[i].StartsWith("--"))
+                break;
+            if (File.Exists(args[i]))
+                files.Add(args[i]);
         }
         return files;
     }

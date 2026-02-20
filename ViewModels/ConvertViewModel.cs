@@ -9,84 +9,192 @@ public class ConvertViewModel : BaseViewModel
 {
     public ObservableCollection<MediaFile> Files { get; } = [];
     public ObservableCollection<string> Formats { get; } = [];
-    public ObservableCollection<string> EncodeModes { get; } = ["通常", "非圧縮コピー (-c copy)", "ロスレス (-crf 0)"];
+    public ObservableCollection<string> EncodeModes { get; } =
+    ["通常", "非圧縮コピー (-c copy)", "ロスレス (-crf 0)"];
     private string _encodeMode = "通常";
     public string EncodeMode
     {
         get => _encodeMode;
-        set { _encodeMode = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsCrfEnabled)); }
+        set
+        {
+            _encodeMode = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCrfEnabled));
+        }
     }
     public bool IsCrfEnabled => EncodeMode == "通常";
 
-    public ObservableCollection<string> HwEncoders { get; } = ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
+    public ObservableCollection<string> HwEncoders { get; } =
+    ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
     private string _hwEncoder = UserSettings.HwEncoder;
     public string HwEncoder
     {
         get => _hwEncoder;
-        set { _hwEncoder = value; OnPropertyChanged(); UserSettings.HwEncoder = value; }
+        set
+        {
+            _hwEncoder = value;
+            OnPropertyChanged();
+            UserSettings.HwEncoder = value;
+        }
     }
 
     private int _crf = 23;
     public int Crf
     {
         get => _crf;
-        set { _crf = value; OnPropertyChanged(); OnPropertyChanged(nameof(CrfLabel)); }
+        set
+        {
+            _crf = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CrfLabel));
+        }
     }
     public string CrfLabel => $"品質 (CRF): {_crf}";
 
-    public ObservableCollection<string> SubtitleModes { get; } = ["コピー (-c:s copy)", "削除 (-sn)"];
+    public ObservableCollection<string> SubtitleModes { get; } =
+    ["コピー (-c:s copy)", "削除 (-sn)"];
     private string _subtitleMode = "コピー (-c:s copy)";
     public string SubtitleMode
     {
         get => _subtitleMode;
-        set { _subtitleMode = value; OnPropertyChanged(); }
+        set
+        {
+            _subtitleMode = value;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isAdvancedOpen;
     public bool IsAdvancedOpen
     {
         get => _isAdvancedOpen;
-        set { _isAdvancedOpen = value; OnPropertyChanged(); }
+        set
+        {
+            _isAdvancedOpen = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _selectedFormat = "";
     public string SelectedFormat
     {
         get => _selectedFormat;
-        set { _selectedFormat = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRun)); }
+        set
+        {
+            _selectedFormat = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRun));
+        }
     }
 
     private double _totalProgress;
     public double TotalProgress
     {
         get => _totalProgress;
-        set { _totalProgress = value; OnPropertyChanged(); }
+        set
+        {
+            _totalProgress = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _statusText = AppStrings.Status_Waiting;
     public string StatusText
     {
         get => _statusText;
-        set { _statusText = value; OnPropertyChanged(); }
+        set
+        {
+            _statusText = value;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isRunning;
     public bool IsRunning
     {
         get => _isRunning;
-        set { _isRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRun)); }
+        set
+        {
+            _isRunning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRun));
+        }
     }
     public bool CanRun => !_isRunning && Files.Count > 0 && !string.IsNullOrEmpty(SelectedFormat);
 
     private CancellationTokenSource? _cts;
 
-    private static readonly string[] VideoFormats = ["mp4 (H.264)", "mp4 (H.265)", "mkv", "mov", "webm", "avi", "gif", "mp3", "aac", "wav", "flac", "ogg", "opus", "m4a"];
-    private static readonly string[] AudioFormats = ["mp3", "aac", "wav", "flac", "ogg", "opus", "m4a"];
-    private static readonly string[] ImageFormats = ["jpg", "png", "webp", "gif", "bmp", "avif", "tiff"];
+    private static readonly string[] VideoFormats =
+    [
+        "mp4 (H.264)",
+        "mp4 (H.265)",
+        "mkv",
+        "mov",
+        "webm",
+        "avi",
+        "gif",
+        "mp3",
+        "aac",
+        "wav",
+        "flac",
+        "ogg",
+        "opus",
+        "m4a",
+    ];
+    private static readonly string[] AudioFormats =
+    [
+        "mp3",
+        "aac",
+        "wav",
+        "flac",
+        "ogg",
+        "opus",
+        "m4a",
+    ];
+    private static readonly string[] ImageFormats =
+    [
+        "jpg",
+        "png",
+        "webp",
+        "gif",
+        "bmp",
+        "avif",
+        "tiff",
+    ];
 
-    private static readonly HashSet<string> AudioExts = [".mp3", ".aac", ".wav", ".flac", ".ogg", ".m4a", ".opus", ".wma"];
-    private static readonly HashSet<string> ImageExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".avif"];
-    private static readonly HashSet<string> VideoExts = [".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".wmv", ".m4v"];
+    private static readonly HashSet<string> AudioExts =
+    [
+        ".mp3",
+        ".aac",
+        ".wav",
+        ".flac",
+        ".ogg",
+        ".m4a",
+        ".opus",
+        ".wma",
+    ];
+    private static readonly HashSet<string> ImageExts =
+    [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".tiff",
+        ".avif",
+    ];
+    private static readonly HashSet<string> VideoExts =
+    [
+        ".mp4",
+        ".mkv",
+        ".mov",
+        ".avi",
+        ".webm",
+        ".flv",
+        ".wmv",
+        ".m4v",
+    ];
 
     private readonly IDialogService _dialogService;
 
@@ -97,11 +205,13 @@ public class ConvertViewModel : BaseViewModel
             Files.Add(new MediaFile { FilePath = path });
 
         var ext = Path.GetExtension(filePaths[0]).ToLowerInvariant();
-        var formats = AudioExts.Contains(ext) ? AudioFormats
-                    : ImageExts.Contains(ext) ? ImageFormats
-                    : VideoFormats;
+        var formats =
+            AudioExts.Contains(ext) ? AudioFormats
+            : ImageExts.Contains(ext) ? ImageFormats
+            : VideoFormats;
 
-        foreach (var f in formats) Formats.Add(f);
+        foreach (var f in formats)
+            Formats.Add(f);
         SelectedFormat = Formats[0];
     }
 
@@ -114,7 +224,8 @@ public class ConvertViewModel : BaseViewModel
 
         foreach (var file in Files)
         {
-            if (token.IsCancellationRequested) break;
+            if (token.IsCancellationRequested)
+                break;
 
             file.Status = ProcessStatus.Processing;
             StatusText = $"処理中: {file.FileName}";
@@ -124,10 +235,19 @@ public class ConvertViewModel : BaseViewModel
                 var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath);
                 var duration = info?.DurationSeconds ?? 0;
 
-                var (ext, argsList) = BuildArgumentsList(file.FilePath, SelectedFormat, EncodeMode, HwEncoder, Crf, SubtitleMode);
+                var (ext, argsList) = BuildArgumentsList(
+                    file.FilePath,
+                    SelectedFormat,
+                    EncodeMode,
+                    HwEncoder,
+                    Crf,
+                    SubtitleMode
+                );
 
                 var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
-                    () => _dialogService.AskOutputPath(file.FilePath, ext));
+                    () =>
+                        _dialogService.AskOutputPath(file.FilePath, ext)
+                );
 
                 if (outputPath == null)
                 {
@@ -147,7 +267,8 @@ public class ConvertViewModel : BaseViewModel
 
                 var (success, _) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
                 file.Status = success ? ProcessStatus.Done : ProcessStatus.Error;
-                if (!success) file.ErrorMessage = AppStrings.Error_FfmpegFailed;
+                if (!success)
+                    file.ErrorMessage = AppStrings.Error_FfmpegFailed;
             }
             catch (OperationCanceledException)
             {
@@ -165,16 +286,24 @@ public class ConvertViewModel : BaseViewModel
             TotalProgress = (double)done / Files.Count * 100;
         }
 
-        StatusText = string.Format(AppStrings.Status_CompleteFormat,
+        StatusText = string.Format(
+            AppStrings.Status_CompleteFormat,
             Files.Count(f => f.Status == ProcessStatus.Done),
-            Files.Count(f => f.Status == ProcessStatus.Error));
+            Files.Count(f => f.Status == ProcessStatus.Error)
+        );
         IsRunning = false;
     }
 
     public void Cancel() => _cts?.Cancel();
 
     private static (string ext, List<string> args) BuildArgumentsList(
-        string inputPath, string format, string encodeMode, string hwEncoder, int crf, string subtitleMode)
+        string inputPath,
+        string format,
+        string encodeMode,
+        string hwEncoder,
+        int crf,
+        string subtitleMode
+    )
     {
         var isVideo = VideoExts.Contains(Path.GetExtension(inputPath).ToLowerInvariant());
 
@@ -184,7 +313,16 @@ public class ConvertViewModel : BaseViewModel
             return (copyExt, ["-i", inputPath, "-c", "copy"]);
         }
 
-        var audioOnlyFormats = new HashSet<string> { "mp3", "aac", "wav", "flac", "ogg", "opus", "m4a" };
+        var audioOnlyFormats = new HashSet<string>
+        {
+            "mp3",
+            "aac",
+            "wav",
+            "flac",
+            "ogg",
+            "opus",
+            "m4a",
+        };
         if (isVideo && audioOnlyFormats.Contains(format))
         {
             return format switch
@@ -200,17 +338,19 @@ public class ConvertViewModel : BaseViewModel
             };
         }
 
-        string VideoCodec(string sw, string nv, string amd, string intel) => hwEncoder switch
-        {
-            "NVIDIA (nvenc)" => nv,
-            "AMD (amf)" => amd,
-            "Intel (qsv)" => intel,
-            _ => sw,
-        };
+        string VideoCodec(string sw, string nv, string amd, string intel) =>
+            hwEncoder switch
+            {
+                "NVIDIA (nvenc)" => nv,
+                "AMD (amf)" => amd,
+                "Intel (qsv)" => intel,
+                _ => sw,
+            };
 
-        string QualityOpt() => encodeMode == "ロスレス (-crf 0)"
-            ? (hwEncoder == "自動 (CPU)" ? "-crf 0" : "-cq 0")
-            : (hwEncoder == "自動 (CPU)" ? $"-crf {crf}" : $"-cq {crf}");
+        string QualityOpt() =>
+            encodeMode == "ロスレス (-crf 0)"
+                ? (hwEncoder == "自動 (CPU)" ? "-crf 0" : "-cq 0")
+                : (hwEncoder == "自動 (CPU)" ? $"-crf {crf}" : $"-cq {crf}");
 
         var subOpt = subtitleMode == "削除 (-sn)" ? "-sn" : "-c:s copy";
 
@@ -220,18 +360,37 @@ public class ConvertViewModel : BaseViewModel
             list.AddRange(QualityOpt().Split(' '));
             list.AddRange(["-c:a", ac]);
             list.AddRange(subOpt.Split(' '));
-            if (extra != null) list.AddRange(extra.Split(' '));
+            if (extra != null)
+                list.AddRange(extra.Split(' '));
             return list;
         }
 
         return format switch
         {
-            "mp4 (H.264)" => (".mp4", Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")),
-            "mp4 (H.265)" => (".mp4", Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")),
-            "mkv" => (".mkv", Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")),
-            "mov" => (".mov", Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")),
-            "webm" => (".webm", Args(VideoCodec("libvpx-vp9", "vp9_nvenc", "vp9_amf", "vp9_qsv"), "libopus")),
-            "avi" => (".avi", Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")),
+            "mp4 (H.264)" => (
+                ".mp4",
+                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
+            ),
+            "mp4 (H.265)" => (
+                ".mp4",
+                Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
+            ),
+            "mkv" => (
+                ".mkv",
+                Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
+            ),
+            "mov" => (
+                ".mov",
+                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
+            ),
+            "webm" => (
+                ".webm",
+                Args(VideoCodec("libvpx-vp9", "vp9_nvenc", "vp9_amf", "vp9_qsv"), "libopus")
+            ),
+            "avi" => (
+                ".avi",
+                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")
+            ),
             "gif" => (".gif", ["-i", inputPath, "-vf", "fps=15,scale=480:-1:flags=lanczos"]),
             "mp3" => (".mp3", ["-i", inputPath, "-c:a", "libmp3lame", "-q:a", "2"]),
             "aac" => (".aac", ["-i", inputPath, "-c:a", "aac", "-b:a", "192k"]),
@@ -250,11 +409,12 @@ public class ConvertViewModel : BaseViewModel
         };
     }
 
-    private static string FormatToExt(string format) => format switch
-    {
-        "mp4 (H.264)" or "mp4 (H.265)" => ".mp4",
-        "jpg" => ".jpg",
-        "m4a" => ".m4a",
-        _ => $".{format}",
-    };
+    private static string FormatToExt(string format) =>
+        format switch
+        {
+            "mp4 (H.264)" or "mp4 (H.265)" => ".mp4",
+            "jpg" => ".jpg",
+            "m4a" => ".m4a",
+            _ => $".{format}",
+        };
 }

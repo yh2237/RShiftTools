@@ -1,5 +1,5 @@
-using Microsoft.Win32;
 using System.IO;
+using Microsoft.Win32;
 
 namespace RShiftTools.Services;
 
@@ -10,7 +10,9 @@ public static class RegistryService
         var exePath = Path.Combine(installDir, AppStrings.ExeName);
 
         var baseRoot = allUsers ? Registry.ClassesRoot : Registry.CurrentUser;
-        var basePath = allUsers ? $@"*\shell\{AppStrings.AppName}" : $@"Software\Classes\*\shell\{AppStrings.AppName}";
+        var basePath = allUsers
+            ? $@"*\shell\{AppStrings.AppName}"
+            : $@"Software\Classes\*\shell\{AppStrings.AppName}";
 
         using var rootKey = baseRoot.CreateSubKey(basePath);
         rootKey.SetValue("MUIVerb", AppStrings.MUIVerb);
@@ -20,9 +22,9 @@ public static class RegistryService
 
         var modes = new (string mode, string label)[]
         {
-            ("convert",  "変換..."),
-            ("resize",   "リサイズ..."),
-            ("cut",      "カット..."),
+            ("convert", "変換..."),
+            ("resize", "リサイズ..."),
+            ("cut", "カット..."),
             ("compress", "サイズ圧縮..."),
         };
 
@@ -41,11 +43,17 @@ public static class RegistryService
         {
             if (allUsers)
             {
-                Registry.ClassesRoot.DeleteSubKeyTree($@"*\shell\{AppStrings.AppName}", throwOnMissingSubKey: false);
+                Registry.ClassesRoot.DeleteSubKeyTree(
+                    $@"*\shell\{AppStrings.AppName}",
+                    throwOnMissingSubKey: false
+                );
             }
             else
             {
-                Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\*\shell\{AppStrings.AppName}", throwOnMissingSubKey: false);
+                Registry.CurrentUser.DeleteSubKeyTree(
+                    $@"Software\Classes\*\shell\{AppStrings.AppName}",
+                    throwOnMissingSubKey: false
+                );
             }
         }
         catch { }

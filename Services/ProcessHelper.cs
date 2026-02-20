@@ -1,16 +1,25 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Collections.Generic;
 
 namespace RShiftTools.Services;
 
 public static class ProcessHelper
 {
-    public static Process StartProcess(string exePath, string arguments, bool redirectStdOut = false, bool redirectStdErr = false)
-        => StartProcess(exePath, SplitCommandLine(arguments), redirectStdOut, redirectStdErr);
+    public static Process StartProcess(
+        string exePath,
+        string arguments,
+        bool redirectStdOut = false,
+        bool redirectStdErr = false
+    ) => StartProcess(exePath, SplitCommandLine(arguments), redirectStdOut, redirectStdErr);
 
-    public static Process StartProcess(string exePath, IEnumerable<string>? argumentList = null, bool redirectStdOut = false, bool redirectStdErr = false)
+    public static Process StartProcess(
+        string exePath,
+        IEnumerable<string>? argumentList = null,
+        bool redirectStdOut = false,
+        bool redirectStdErr = false
+    )
     {
         var startInfo = new ProcessStartInfo
         {
@@ -32,7 +41,8 @@ public static class ProcessHelper
             {
                 foreach (var a in argumentList)
                 {
-                    if (a is null) continue;
+                    if (a is null)
+                        continue;
                     startInfo.ArgumentList.Add(a);
                 }
             }
@@ -58,10 +68,12 @@ public static class ProcessHelper
     private static List<string> SplitCommandLine(string? commandLine)
     {
         var result = new List<string>();
-        if (string.IsNullOrEmpty(commandLine)) return result;
+        if (string.IsNullOrEmpty(commandLine))
+            return result;
 
         var ptr = CommandLineToArgvW(commandLine, out var count);
-        if (ptr == IntPtr.Zero) return result;
+        if (ptr == IntPtr.Zero)
+            return result;
 
         try
         {
@@ -69,7 +81,8 @@ public static class ProcessHelper
             {
                 var p = Marshal.ReadIntPtr(ptr, i * IntPtr.Size);
                 var s = Marshal.PtrToStringUni(p);
-                if (s != null) result.Add(s);
+                if (s != null)
+                    result.Add(s);
             }
         }
         finally
@@ -80,7 +93,8 @@ public static class ProcessHelper
         return result;
     }
 
-    public static List<string> SplitCommandLinePublic(string? commandLine) => SplitCommandLine(commandLine);
+    public static List<string> SplitCommandLinePublic(string? commandLine) =>
+        SplitCommandLine(commandLine);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr CommandLineToArgvW(string lpCmdLine, out int pNumArgs);

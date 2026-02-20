@@ -10,23 +10,32 @@ public class CutViewModel : BaseViewModel
     public MediaFile File { get; }
 
     private static readonly HashSet<string> AnimatedImageExts = [".gif", ".webp"];
-    public bool IsAnimatedImage => AnimatedImageExts.Contains(
-        Path.GetExtension(File.FilePath).ToLowerInvariant());
-    public bool IsPreviewAvailable => !Path.GetExtension(File.FilePath)
-        .Equals(".webp", StringComparison.OrdinalIgnoreCase);
+    public bool IsAnimatedImage =>
+        AnimatedImageExts.Contains(Path.GetExtension(File.FilePath).ToLowerInvariant());
+    public bool IsPreviewAvailable =>
+        !Path.GetExtension(File.FilePath).Equals(".webp", StringComparison.OrdinalIgnoreCase);
 
     private double _totalSeconds;
     public double TotalSeconds
     {
         get => _totalSeconds;
-        set { _totalSeconds = value; OnPropertyChanged(); }
+        set
+        {
+            _totalSeconds = value;
+            OnPropertyChanged();
+        }
     }
 
     private double _currentSeconds;
     public double CurrentSeconds
     {
         get => _currentSeconds;
-        set { _currentSeconds = value; OnPropertyChanged(); OnPropertyChanged(nameof(CurrentTimeText)); }
+        set
+        {
+            _currentSeconds = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CurrentTimeText));
+        }
     }
     public string CurrentTimeText
     {
@@ -89,7 +98,12 @@ public class CutViewModel : BaseViewModel
     public bool IsPlaying
     {
         get => _isPlaying;
-        set { _isPlaying = value; OnPropertyChanged(); OnPropertyChanged(nameof(PlayButtonText)); }
+        set
+        {
+            _isPlaying = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PlayButtonText));
+        }
     }
     public string PlayButtonText => _isPlaying ? "⏸" : "▶";
 
@@ -98,7 +112,12 @@ public class CutViewModel : BaseViewModel
     public double PlaybackSpeed
     {
         get => _playbackSpeed;
-        set { _playbackSpeed = value; OnPropertyChanged(); SpeedChanged?.Invoke(value); }
+        set
+        {
+            _playbackSpeed = value;
+            OnPropertyChanged();
+            SpeedChanged?.Invoke(value);
+        }
     }
 
     private double _volume = 100;
@@ -114,28 +133,45 @@ public class CutViewModel : BaseViewModel
             VolumeChanged?.Invoke(_volume / 100.0);
         }
     }
-    public string VolumeIcon => _volume == 0 ? "🔇" : _volume < 40 ? "🔈" : _volume < 75 ? "🔉" : "🔊";
+    public string VolumeIcon =>
+        _volume == 0 ? "🔇"
+        : _volume < 40 ? "🔈"
+        : _volume < 75 ? "🔉"
+        : "🔊";
     public string VolumeText => $"{(int)_volume}%";
 
     private double _progress;
     public double Progress
     {
         get => _progress;
-        set { _progress = value; OnPropertyChanged(); }
+        set
+        {
+            _progress = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _statusText = AppStrings.Status_Waiting;
     public string StatusText
     {
         get => _statusText;
-        set { _statusText = value; OnPropertyChanged(); }
+        set
+        {
+            _statusText = value;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isRunning;
     public bool IsRunning
     {
         get => _isRunning;
-        set { _isRunning = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRun)); }
+        set
+        {
+            _isRunning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRun));
+        }
     }
     public bool CanRun => !_isRunning && _outPoint > _inPoint;
 
@@ -143,16 +179,27 @@ public class CutViewModel : BaseViewModel
     public int Crf
     {
         get => _crf;
-        set { _crf = value; OnPropertyChanged(); OnPropertyChanged(nameof(CrfLabel)); }
+        set
+        {
+            _crf = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CrfLabel));
+        }
     }
     public string CrfLabel => $"品質 (CRF): {_crf}";
 
-    public ObservableCollection<string> HwEncoders { get; } = ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
+    public ObservableCollection<string> HwEncoders { get; } =
+    ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
     private string _hwEncoder = UserSettings.HwEncoder;
     public string HwEncoder
     {
         get => _hwEncoder;
-        set { _hwEncoder = value; OnPropertyChanged(); UserSettings.HwEncoder = value; }
+        set
+        {
+            _hwEncoder = value;
+            OnPropertyChanged();
+            UserSettings.HwEncoder = value;
+        }
     }
 
     private CancellationTokenSource? _cts;
@@ -182,6 +229,7 @@ public class CutViewModel : BaseViewModel
     }
 
     public void SetInPoint() => InPoint = _currentSeconds;
+
     public void SetOutPoint() => OutPoint = _currentSeconds;
 
     public void TogglePlay()
@@ -215,8 +263,9 @@ public class CutViewModel : BaseViewModel
             StatusText = "処理中...";
             var ext = Path.GetExtension(File.FilePath).ToLowerInvariant();
 
-            var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
-                () => _dialogService.AskOutputPath(File.FilePath, ext));
+            var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                _dialogService.AskOutputPath(File.FilePath, ext)
+            );
 
             if (outputPath == null)
             {
@@ -231,8 +280,7 @@ public class CutViewModel : BaseViewModel
 
             if (AnimatedImageExts.Contains(ext))
             {
-                argsList = ["-y", "-ss", inStr, "-i", File.FilePath,
-                            "-t", duration.ToString("F3")];
+                argsList = ["-y", "-ss", inStr, "-i", File.FilePath, "-t", duration.ToString("F3")];
                 if (ext == ".webp")
                     argsList.AddRange(["-vcodec", "libwebp", "-loop", "0"]);
                 argsList.Add(outputPath);
@@ -248,8 +296,18 @@ public class CutViewModel : BaseViewModel
                 };
                 var hwQualityOpt = _hwEncoder == "自動 (CPU)" ? $"-crf {_crf}" : $"-cq {_crf}";
 
-                argsList = ["-y", "-ss", inStr, "-i", File.FilePath,
-                            "-t", duration.ToString("F3"), "-c:v", videoCodec];
+                argsList =
+                [
+                    "-y",
+                    "-ss",
+                    inStr,
+                    "-i",
+                    File.FilePath,
+                    "-t",
+                    duration.ToString("F3"),
+                    "-c:v",
+                    videoCodec,
+                ];
                 argsList.AddRange(hwQualityOpt.Split(' ', StringSplitOptions.RemoveEmptyEntries));
                 argsList.AddRange(["-c:a", "aac", outputPath]);
             }
@@ -261,7 +319,9 @@ public class CutViewModel : BaseViewModel
 
             var (success, error) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
 
-            StatusText = success ? AppStrings.Status_Success : $"{AppStrings.Status_Error}: {error}";
+            StatusText = success
+                ? AppStrings.Status_Success
+                : $"{AppStrings.Status_Error}: {error}";
             if (!success)
                 System.Windows.MessageBox.Show(error, AppStrings.AppName);
         }

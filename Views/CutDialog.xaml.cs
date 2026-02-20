@@ -60,8 +60,7 @@ public partial class CutDialog : Window
         await _vm.InitAsync();
     }
 
-    private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
-        => UpdateMarkers();
+    private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e) => UpdateMarkers();
 
     private void MediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
     {
@@ -73,7 +72,9 @@ public partial class CutDialog : Window
     }
 
     private void PlayPause_Click(object sender, RoutedEventArgs e) => _vm.TogglePlay();
+
     private void ToStart_Click(object sender, RoutedEventArgs e) => _vm.Seek(0);
+
     private void ToEnd_Click(object sender, RoutedEventArgs e) => _vm.Seek(_vm.TotalSeconds);
 
     private void SetIn_Click(object sender, RoutedEventArgs e)
@@ -97,26 +98,26 @@ public partial class CutDialog : Window
 
     private void SeekSlider_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isDraggingSlider) return;
+        if (!_isDraggingSlider)
+            return;
         SeekToPoint(sender as Slider, e.GetPosition((Slider)sender));
     }
 
     private void SeekSlider_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isDraggingSlider) return;
+        if (!_isDraggingSlider)
+            return;
         _isDraggingSlider = false;
         SeekSlider.ReleaseMouseCapture();
         SeekToPoint(sender as Slider, e.GetPosition((Slider)sender));
     }
 
-    private void SeekSlider_MouseLeave(object sender, MouseEventArgs e)
-    {
-
-    }
+    private void SeekSlider_MouseLeave(object sender, MouseEventArgs e) { }
 
     private void SeekToPoint(Slider? slider, Point point)
     {
-        if (slider == null || slider.ActualWidth <= 0) return;
+        if (slider == null || slider.ActualWidth <= 0)
+            return;
         var thumbWidth = 11.0;
         var trackWidth = slider.ActualWidth - thumbWidth;
         var ratio = Math.Max(0, Math.Min(1, (point.X - thumbWidth / 2) / trackWidth));
@@ -128,7 +129,8 @@ public partial class CutDialog : Window
 
     private void TimeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
+        if (e.Key != Key.Enter)
+            return;
         var textBox = (TextBox)sender;
         textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
         UpdateMarkers();
@@ -137,7 +139,8 @@ public partial class CutDialog : Window
 
     private void CurrentTimeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
+        if (e.Key != Key.Enter)
+            return;
         var textBox = (TextBox)sender;
         textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
         Keyboard.ClearFocus();
@@ -145,18 +148,18 @@ public partial class CutDialog : Window
 
     private void UpdateMarkers()
     {
-        if (_vm.TotalSeconds <= 0) return;
+        if (_vm.TotalSeconds <= 0)
+            return;
         var w = SeekSlider.ActualWidth;
-        if (w <= 0) return;
+        if (w <= 0)
+            return;
         Canvas.SetLeft(InMarker, _vm.InPoint / _vm.TotalSeconds * w);
         Canvas.SetLeft(OutMarker, _vm.OutPoint / _vm.TotalSeconds * w);
     }
 
-    private async void RunButton_Click(object sender, RoutedEventArgs e)
-        => await _vm.RunAsync();
+    private async void RunButton_Click(object sender, RoutedEventArgs e) => await _vm.RunAsync();
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-        => _vm.Cancel();
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => _vm.Cancel();
 
     protected override void OnClosed(EventArgs e)
     {

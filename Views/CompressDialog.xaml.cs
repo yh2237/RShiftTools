@@ -21,9 +21,7 @@ public partial class CompressDialog : Window
         await _vm.InitAsync();
     }
 
-    private async void RunButton_Click(object sender, RoutedEventArgs e)
-        => await _vm.RunAsync();
+    private async void RunButton_Click(object sender, RoutedEventArgs e) => await _vm.RunAsync();
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-        => _vm.Cancel();
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => _vm.Cancel();
 }

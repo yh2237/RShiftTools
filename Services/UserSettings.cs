@@ -7,14 +7,20 @@ public static class UserSettings
 {
     private static readonly string _path = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "RShiftTools", "settings.json");
+        "RShiftTools",
+        "settings.json"
+    );
 
     private static SettingsData _data = Load();
 
     public static string HwEncoder
     {
         get => _data.HwEncoder;
-        set { _data.HwEncoder = value; Save(); }
+        set
+        {
+            _data.HwEncoder = value;
+            Save();
+        }
     }
 
     private static SettingsData Load()
@@ -36,7 +42,10 @@ public static class UserSettings
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(
+                _data,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
             File.WriteAllText(_path, json);
         }
         catch { }

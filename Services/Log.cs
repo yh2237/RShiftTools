@@ -10,20 +10,33 @@ public static class Log
 
     static Log()
     {
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RShiftTools");
-        try { Directory.CreateDirectory(dir); } catch { dir = Directory.GetCurrentDirectory(); }
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RShiftTools"
+        );
+        try
+        {
+            Directory.CreateDirectory(dir);
+        }
+        catch
+        {
+            dir = Directory.GetCurrentDirectory();
+        }
         _logPath = Path.Combine(dir, "RShiftTools.log");
     }
 
     public static void Info(string message) => Write("INFO", message);
+
     public static void Error(string message) => Write("ERROR", message);
+
     public static void Debug(string message) => Write("DEBUG", message);
 
     private static void Write(string level, string message)
     {
         try
         {
-            var line = $"{DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)} [{level}] {message}";
+            var line =
+                $"{DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)} [{level}] {message}";
             lock (_lock)
             {
                 File.AppendAllText(_logPath, line + Environment.NewLine);
