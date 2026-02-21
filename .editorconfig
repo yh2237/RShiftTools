@@ -1,0 +1,2 @@
+[*.xaml]
+csharpier_format = false
