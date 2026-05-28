@@ -69,7 +69,7 @@ public class FfmpegService : IFfmpegService
                                 m = 0;
                             if (!int.TryParse(match.Groups[3].Value, out var s))
                                 s = 0;
-                            var frac = match.Groups[4].Value.PadRight(2, '0')[..2];
+                            var frac = match.Groups[4].Value.PadLeft(2, '0')[..2];
                             if (!int.TryParse(frac, out var cs))
                                 cs = 0;
                             var current = new TimeSpan(0, h, m, s, cs * 10);

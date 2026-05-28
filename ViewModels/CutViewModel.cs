@@ -340,7 +340,10 @@ public class CutViewModel : BaseViewModel
 
     public async Task RunAsync()
     {
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
 
@@ -449,7 +452,7 @@ public class CutViewModel : BaseViewModel
         return $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds:D3}";
     }
 
-    private static bool TryParseTime(string text, out double seconds)
+    internal static bool TryParseTime(string text, out double seconds)
     {
         seconds = 0;
         if (TimeSpan.TryParseExact(text, @"hh\:mm\:ss\.fff", null, out var ts))

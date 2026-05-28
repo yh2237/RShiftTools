@@ -63,8 +63,13 @@ public class SettingsViewModel : BaseViewModel
         {
             if (_contextMenuMode == "表示しない")
             {
-                RegistryService.Unregister(allUsers: true);
-                RegistryService.Unregister(allUsers: false);
+                try { RegistryService.Unregister(allUsers: true); }
+                catch (UnauthorizedAccessException) { }
+                catch (Exception ex) { Log.Error($"HKCR unregister failed: {ex.Message}"); }
+
+                try { RegistryService.Unregister(allUsers: false); }
+                catch (Exception ex) { Log.Error($"HKCU unregister failed: {ex.Message}"); }
+
                 InstallStatus = "右クリックメニューの登録を削除しました。";
             }
             else

@@ -47,6 +47,7 @@ public partial class CutDialog : Window
         };
 
         PreviewKeyDown += OnKeyDown;
+        MouseLeftButtonUp += OnWindowMouseUp;
         Focusable = true;
 
         Loaded += async (_, _) =>
@@ -97,6 +98,11 @@ public partial class CutDialog : Window
         UpdateMarkers();
     }
 
+    private void OnWindowMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        _isDraggingSlider = false;
+    }
+
     private void OnTimerTick(object? sender, EventArgs e)
     {
         if (!_isDraggingSlider && MediaPlayer.NaturalDuration.HasTimeSpan)
@@ -116,9 +122,13 @@ public partial class CutDialog : Window
     }
 
     private DispatcherTimer? _initTimer;
+    private bool _initDone;
 
     private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
     {
+        if (_initDone)
+            return;
+        _initDone = true;
         if (MediaPlayer.NaturalDuration.HasTimeSpan)
         {
             _vm.TotalSeconds = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
@@ -220,7 +230,7 @@ public partial class CutDialog : Window
     {
         if (e.Key == Key.Enter)
         {
-            if (double.TryParse((sender as TextBox)?.Text, out var s))
+            if (ViewModels.CutViewModel.TryParseTime((sender as TextBox)?.Text ?? "", out var s))
                 SeekTo(s);
         }
     }
@@ -236,7 +246,10 @@ public partial class CutDialog : Window
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(_vm.LastOutputDir))
-            Process.Start("explorer.exe", _vm.LastOutputDir);
+        {
+            try { Process.Start("explorer.exe", _vm.LastOutputDir); }
+            catch (Exception ex) { MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)

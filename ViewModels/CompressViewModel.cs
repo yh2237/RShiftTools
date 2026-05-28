@@ -71,7 +71,7 @@ public class CompressViewModel : BaseViewModel
         get => _imageQuality;
         set
         {
-            _imageQuality = value;
+            _imageQuality = Math.Max(ImageQualityMin, Math.Min(ImageQualityMax, value));
             OnPropertyChanged();
             OnPropertyChanged(nameof(ImageQualityLabel));
         }
@@ -270,6 +270,8 @@ public class CompressViewModel : BaseViewModel
 
     public async Task RunAsync()
     {
+        if (IsRunning)
+            return;
         if (IsImageMode)
             await RunImageAsync();
         else if (IsAudioMode)
@@ -280,7 +282,10 @@ public class CompressViewModel : BaseViewModel
 
     private async Task RunImageAsync()
     {
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
@@ -380,7 +385,10 @@ public class CompressViewModel : BaseViewModel
 
     private async Task RunAudioAsync()
     {
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
@@ -432,14 +440,13 @@ public class CompressViewModel : BaseViewModel
                     continue;
                 }
 
-                var targetBitsAudio = _targetSizeMb * 8 * 1024 * 1024;
-                var audioBitrateKbps = (int)(targetBitsAudio / duration / 1000);
-                if (audioBitrateKbps <= 0)
+                var audioBitrateKbps = AudioQuality switch
                 {
-                    file.Status = ProcessStatus.Error;
-                    file.ErrorMessage = "目標サイズが小さすぎます";
-                    continue;
-                }
+                    "コピー" => _audioBitrateCacheKbps.GetValueOrDefault(file.FilePath, 128),
+                    _ => GetEstimatedAudioBitrateKbps(file.FilePath),
+                };
+                if (audioBitrateKbps <= 0)
+                    audioBitrateKbps = 128;
 
                 var ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
                 string? outputPath;
@@ -529,7 +536,10 @@ public class CompressViewModel : BaseViewModel
     private async Task RunVideoAsync()
     {
         Log.Info("Compress RunVideoAsync started");
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
@@ -589,7 +599,8 @@ public class CompressViewModel : BaseViewModel
 
                 var audioBitrateKbps = GetEstimatedAudioBitrateKbps(file.FilePath);
                 var targetBits = _targetSizeMb * 8 * 1024 * 1024;
-                var videoBitrateKbps = (int)(targetBits / duration / 1000) - audioBitrateKbps;
+                var rawBitrate = targetBits / duration / 1000;
+                var videoBitrateKbps = (int)Math.Min(rawBitrate, int.MaxValue - audioBitrateKbps) - audioBitrateKbps;
 
                 Log.Info($"Bitrate calc: targetMb={_targetSizeMb}, dur={duration}, audio={audioBitrateKbps}, video={videoBitrateKbps}");
 

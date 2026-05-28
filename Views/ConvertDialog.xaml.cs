@@ -39,7 +39,10 @@ public partial class ConvertDialog : Window
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(_vm.LastOutputDir))
-            Process.Start("explorer.exe", _vm.LastOutputDir);
+        {
+            try { Process.Start("explorer.exe", _vm.LastOutputDir); }
+            catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)

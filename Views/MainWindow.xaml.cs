@@ -140,9 +140,16 @@ public partial class MainWindow : Window
 
     private void MenuGitHub_Click(object sender, RoutedEventArgs e)
     {
-        Process.Start(
-            new ProcessStartInfo("https://github.com/yh2237/RShiftTools") { UseShellExecute = true }
-        );
+        try
+        {
+            Process.Start(
+                new ProcessStartInfo("https://github.com/yh2237/RShiftTools") { UseShellExecute = true }
+            );
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void MenuAbout_Click(object sender, RoutedEventArgs e)

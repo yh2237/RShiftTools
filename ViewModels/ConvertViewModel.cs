@@ -231,7 +231,10 @@ public class ConvertViewModel : BaseViewModel
 
     public async Task RunAsync()
     {
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
@@ -433,7 +436,7 @@ public class ConvertViewModel : BaseViewModel
                 ".mov",
                 Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
             ),
-            "webm" => (".webm", Args("libvpx-vp9", "libopus")),
+            "webm" => (".webm", ["-i", inputPath, "-c:v", "libvpx-vp9", "-crf", crf.ToString(), "-c:a", "libopus"]),
             "avi" => (
                 ".avi",
                 Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")
@@ -446,12 +449,12 @@ public class ConvertViewModel : BaseViewModel
             "ogg" => (".ogg", ["-i", inputPath, "-c:a", "libvorbis", "-q:a", "6"]),
             "opus" => (".opus", ["-i", inputPath, "-c:a", "libopus", "-b:a", "128k"]),
             "m4a" => (".m4a", ["-i", inputPath, "-c:a", "aac", "-b:a", "192k"]),
-            "jpg" => (".jpg", ["-i", inputPath, "-q:v", "3"]),
-            "png" => (".png", ["-i", inputPath]),
-            "webp" => (".webp", ["-i", inputPath, "-q:v", "80"]),
-            "bmp" => (".bmp", ["-i", inputPath]),
-            "avif" => (".avif", ["-i", inputPath, "-c:v", "libaom-av1"]),
-            "tiff" => (".tiff", ["-i", inputPath]),
+            "jpg" => (".jpg", ["-y", "-i", inputPath, "-q:v", "3"]),
+            "png" => (".png", ["-y", "-i", inputPath]),
+            "webp" => (".webp", ["-y", "-i", inputPath, "-q:v", "80"]),
+            "bmp" => (".bmp", ["-y", "-i", inputPath]),
+            "avif" => (".avif", ["-y", "-i", inputPath, "-c:v", "libaom-av1"]),
+            "tiff" => (".tiff", ["-y", "-i", inputPath]),
             _ => (".mp4", ["-i", inputPath, "-c:v", "libx264", "-crf", crf.ToString(), "-c:a", "aac"]),
         };
     }

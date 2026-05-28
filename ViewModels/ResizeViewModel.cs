@@ -227,7 +227,10 @@ public class ResizeViewModel : BaseViewModel
 
     public async Task RunAsync()
     {
+        if (IsRunning)
+            return;
         IsRunning = true;
+        _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
