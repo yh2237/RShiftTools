@@ -26,7 +26,7 @@ public class CompressViewModel : BaseViewModel
     }
 
     public ObservableCollection<string> AudioQualities { get; } =
-    ["低 (96kbps)", "中 (128kbps)", "高 (192kbps)", "コピー"];
+    ["低 (96kbps)", "中 (128kbps)", "高 (192kbps)", "コピー", "音声無し"];
 
     private string _audioQuality = "中 (128kbps)";
     public string AudioQuality
@@ -243,7 +243,9 @@ public class CompressViewModel : BaseViewModel
         var audioDisplay =
             AudioQuality == "コピー"
                 ? $"コピー（入力推定: {estimatedAudioBitrateKbps} kbps）"
-                : $"{estimatedAudioBitrateKbps} kbps";
+                : AudioQuality == "音声無し"
+                    ? "無し"
+                    : $"{estimatedAudioBitrateKbps} kbps";
 
         EstimateText =
             $"推定映像ビットレート：{videoBitrate} kbps  /  音声：{audioDisplay}";
@@ -251,6 +253,9 @@ public class CompressViewModel : BaseViewModel
 
     private int GetEstimatedAudioBitrateKbps(string filePath)
     {
+        if (AudioQuality == "音声無し")
+            return 0;
+
         if (AudioQuality == "コピー")
         {
             if (_audioBitrateCacheKbps.TryGetValue(filePath, out var cachedCopy) && cachedCopy > 0)
@@ -465,6 +470,13 @@ public class CompressViewModel : BaseViewModel
                     continue;
                 }
 
+                if (AudioQuality == "音声無し")
+                {
+                    file.Status = ProcessStatus.Error;
+                    file.ErrorMessage = "音声ファイルに対して「音声無し」は使用できません";
+                    continue;
+                }
+
                 var audioCodec = AudioQuality == "コピー" ? "copy" : "aac";
                 var audioArgs = AudioQuality == "コピー"
                     ? new[] { "-c:a", "copy" }
@@ -645,9 +657,11 @@ public class CompressViewModel : BaseViewModel
                 StatusText = $"処理中: {file.FileName}";
 
                 var audioArgs =
-                    AudioQuality == "コピー"
-                        ? new[] { "-c:a", "copy" }
-                        : new[] { "-c:a", "aac", "-b:a", $"{audioBitrateKbps}k" };
+                    AudioQuality == "音声無し"
+                        ? new[] { "-an" }
+                        : AudioQuality == "コピー"
+                            ? new[] { "-c:a", "copy" }
+                            : new[] { "-c:a", "aac", "-b:a", $"{audioBitrateKbps}k" };
 
                 var encodeArgsList = new List<string>
                 {
