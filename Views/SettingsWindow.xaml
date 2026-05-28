@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="設定 - RShiftTools"
     Width="440"
-    Height="225"
+    Height="300"
     ResizeMode="CanMinimize"
     WindowStartupLocation="CenterScreen">
 
@@ -37,8 +37,9 @@
                     VerticalAlignment="Center"
                     Text="デフォルトのハードウェアエンコード：" />
                 <ComboBox
+                    Grid.Column="1"
                     ItemsSource="{Binding HwEncoders}"
-                    SelectedItem="{Binding HwEncoder}" Grid.ColumnSpan="2" Margin="164,0,0,0" />
+                    SelectedItem="{Binding HwEncoder}" />
             </Grid>
         </Border>
 
@@ -48,12 +49,19 @@
             BorderBrush="#FFF"
             BorderThickness="1">
             <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
                 <TextBlock
-                    Margin="0,0,0,6"
+                    Grid.Column="0"
+                    Margin="0,0,12,0"
+                    VerticalAlignment="Center"
                     Text="右クリックメニューの表示：" />
                 <ComboBox
+                    Grid.Column="1"
                     ItemsSource="{Binding ContextMenuModes}"
-                    SelectedItem="{Binding ContextMenuMode}" Margin="164,0,0,0" />
+                    SelectedItem="{Binding ContextMenuMode}" />
             </Grid>
         </Border>
 
