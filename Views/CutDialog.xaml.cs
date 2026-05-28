@@ -23,12 +23,14 @@ public partial class CutDialog : Window
         _vm = new CutViewModel(files[0], new DialogService());
         DataContext = _vm;
 
-        if (_vm.IsPreviewAvailable)
-            MediaPlayer.Source = new Uri(_vm.File.FilePath);
-        else
+        if (!_vm.IsPreviewAvailable)
             PreviewUnavailableMsg.Visibility = Visibility.Visible;
 
-        _vm.PlayRequested += () => MediaPlayer.Play();
+        _vm.PlayRequested += () =>
+        {
+            MediaPlayer.Position = TimeSpan.FromSeconds(_vm.CurrentSeconds);
+            MediaPlayer.Play();
+        };
         _vm.PauseRequested += () => MediaPlayer.Pause();
         _vm.SeekRequested += seconds =>
         {
@@ -52,8 +54,21 @@ public partial class CutDialog : Window
 
         Loaded += async (_, _) =>
         {
+            Log.Debug("CutDialog Loaded - starting InitAsync");
             await _vm.InitAsync();
+            Log.Debug($"InitAsync completed. TotalSeconds={_vm.TotalSeconds}");
             UpdateMarkers();
+
+            if (_vm.IsPreviewAvailable)
+            {
+                MediaPlayer.Source = new Uri(_vm.File.FilePath);
+                MediaPlayer.Play();
+                await Task.Delay(200);
+                MediaPlayer.Pause();
+                MediaPlayer.Position = TimeSpan.Zero;
+                _vm.CurrentSeconds = 0;
+                UpdateMarkers();
+            }
         };
     }
 
@@ -121,32 +136,14 @@ public partial class CutDialog : Window
         Canvas.SetLeft(OutMarker, outPos);
     }
 
-    private DispatcherTimer? _initTimer;
-    private bool _initDone;
-
     private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
     {
-        if (_initDone)
-            return;
-        _initDone = true;
+        Log.Debug($"MediaOpened fired. HasTimeSpan={MediaPlayer.NaturalDuration.HasTimeSpan}");
         if (MediaPlayer.NaturalDuration.HasTimeSpan)
         {
             _vm.TotalSeconds = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
             _vm.OutPoint = _vm.TotalSeconds;
         }
-        MediaPlayer.Play();
-        _initTimer?.Stop();
-        _initTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(200), DispatcherPriority.Normal, OnInitTimerTick, Dispatcher);
-        _initTimer.Start();
-    }
-
-    private void OnInitTimerTick(object? sender, EventArgs e)
-    {
-        _initTimer?.Stop();
-        MediaPlayer.Pause();
-        MediaPlayer.Position = TimeSpan.Zero;
-        _vm.CurrentSeconds = 0;
-        UpdateMarkers();
     }
 
     private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
@@ -266,7 +263,6 @@ public partial class CutDialog : Window
             }
         }
         _timer.Stop();
-        _initTimer?.Stop();
         base.OnClosing(e);
     }
 }

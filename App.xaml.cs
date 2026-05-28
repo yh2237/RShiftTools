@@ -75,10 +75,10 @@ public partial class App : Application
 
         if (mode != null && files.Count > 0)
         {
-            var collected = CollectFromSiblingInstances(mode, files);
-            if (collected == null)
-                return;
-            files = collected;
+            // var collected = CollectFromSiblingInstances(mode, files);
+            // if (collected == null)
+            //     return;
+            // files = collected;
         }
 
         if (!File.Exists(FfmpegPath) || !File.Exists(FfprobePath))
@@ -138,7 +138,8 @@ public partial class App : Application
     {
         var pipeName = $"RShiftTools_{mode}";
         var sessionId = Environment.ProcessId;
-        var sessionDir = Path.Combine(Path.GetTempPath(), "RShiftTools", pipeName);
+        var sessionKey = (DateTime.UtcNow.Ticks / 100000).ToString();
+        var sessionDir = Path.Combine(Path.GetTempPath(), "RShiftTools", pipeName + "_" + sessionKey);
 
         Directory.CreateDirectory(sessionDir);
         var myFile = Path.Combine(sessionDir, $"{sessionId}.txt");
@@ -152,21 +153,7 @@ public partial class App : Application
                 1
             );
 
-            var lastCount = 0;
-            var stableSince = DateTime.UtcNow;
-            var deadline = DateTime.UtcNow.AddMilliseconds(1500);
-            while (DateTime.UtcNow < deadline)
-            {
-                var count = Directory.GetFiles(sessionDir, "*.txt").Length;
-                if (count != lastCount)
-                {
-                    lastCount = count;
-                    stableSince = DateTime.UtcNow;
-                }
-                if (count > 0 && (DateTime.UtcNow - stableSince).TotalMilliseconds >= 200)
-                    break;
-                Thread.Sleep(50);
-            }
+            Thread.Sleep(200);
 
             var allFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in Directory.GetFiles(sessionDir, "*.txt"))
@@ -182,13 +169,7 @@ public partial class App : Application
                 catch { }
             }
 
-            try
-            {
-                foreach (var f in Directory.GetFiles(sessionDir, "*.*"))
-                    File.Delete(f);
-                Directory.Delete(sessionDir);
-            }
-            catch { }
+            try { Directory.Delete(sessionDir, true); } catch { }
 
             if (allFiles.Count == 0)
             {
