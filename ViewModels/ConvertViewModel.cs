@@ -84,8 +84,36 @@ public class ConvertViewModel : BaseViewModel
             _selectedFormat = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanRun));
+            OnPropertyChanged(nameof(IsGifSelected));
         }
     }
+    public bool IsGifSelected => _selectedFormat == "gif";
+
+    private int _gifFps = 15;
+    public int GifFps
+    {
+        get => _gifFps;
+        set
+        {
+            _gifFps = Math.Max(1, Math.Min(60, value));
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GifFpsLabel));
+        }
+    }
+    public string GifFpsLabel => $"FPS: {_gifFps}";
+
+    private int _gifScale = 480;
+    public int GifScale
+    {
+        get => _gifScale;
+        set
+        {
+            _gifScale = Math.Max(64, Math.Min(3840, value));
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GifScaleLabel));
+        }
+    }
+    public string GifScaleLabel => $"幅: {_gifScale}px";
 
     private double _totalProgress;
     public double TotalProgress
@@ -123,6 +151,19 @@ public class ConvertViewModel : BaseViewModel
     public bool CanRun => !_isRunning && Files.Count > 0 && !string.IsNullOrEmpty(SelectedFormat);
 
     private CancellationTokenSource? _cts;
+
+    private string? _lastOutputDir;
+    public string? LastOutputDir
+    {
+        get => _lastOutputDir;
+        private set
+        {
+            _lastOutputDir = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasOutput));
+        }
+    }
+    public bool HasOutput => !string.IsNullOrEmpty(_lastOutputDir);
 
     private static readonly string[] VideoFormats =
     [
@@ -162,39 +203,9 @@ public class ConvertViewModel : BaseViewModel
         "tiff",
     ];
 
-    private static readonly HashSet<string> AudioExts =
-    [
-        ".mp3",
-        ".aac",
-        ".wav",
-        ".flac",
-        ".ogg",
-        ".m4a",
-        ".opus",
-        ".wma",
-    ];
-    private static readonly HashSet<string> ImageExts =
-    [
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".webp",
-        ".bmp",
-        ".tiff",
-        ".avif",
-    ];
-    private static readonly HashSet<string> VideoExts =
-    [
-        ".mp4",
-        ".mkv",
-        ".mov",
-        ".avi",
-        ".webm",
-        ".flv",
-        ".wmv",
-        ".m4v",
-    ];
+    private static readonly HashSet<string> AudioExts = MediaFormats.AudioExtensions;
+    private static readonly HashSet<string> ImageExts = MediaFormats.ImageExtensions;
+    private static readonly HashSet<string> VideoExts = MediaFormats.VideoExtensions;
 
     private readonly IDialogService _dialogService;
 
@@ -203,6 +214,9 @@ public class ConvertViewModel : BaseViewModel
         _dialogService = dialogService;
         foreach (var path in filePaths)
             Files.Add(new MediaFile { FilePath = path });
+
+        if (filePaths.Count == 0)
+            return;
 
         var ext = Path.GetExtension(filePaths[0]).ToLowerInvariant();
         var formats =
@@ -221,6 +235,27 @@ public class ConvertViewModel : BaseViewModel
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
         var done = 0;
+
+        string? multiOutputDir = null;
+        if (Files.Count > 1)
+        {
+            var suggestedDir =
+                System.IO.Path.GetDirectoryName(Files[0].FilePath) ?? "";
+            multiOutputDir = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                () => _dialogService.AskOutputFolder(suggestedDir)
+            );
+            if (multiOutputDir == null)
+            {
+                foreach (var f in Files)
+                {
+                    f.Status = ProcessStatus.Cancelled;
+                    f.ErrorMessage = AppStrings.Error_Cancelled;
+                }
+                StatusText = AppStrings.Status_Waiting;
+                IsRunning = false;
+                return;
+            }
+        }
 
         foreach (var file in Files)
         {
@@ -241,17 +276,26 @@ public class ConvertViewModel : BaseViewModel
                     EncodeMode,
                     HwEncoder,
                     Crf,
-                    SubtitleMode
+                    SubtitleMode,
+                    GifFps,
+                    GifScale
                 );
 
-                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
-                    () =>
-                        _dialogService.AskOutputPath(file.FilePath, ext)
-                );
+                string? outputPath;
+                if (multiOutputDir != null)
+                {
+                    outputPath = BuildUniqueOutputPath(multiOutputDir, file.FilePath, ext);
+                }
+                else
+                {
+                    outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                        () => _dialogService.AskOutputPath(file.FilePath, ext)
+                    );
+                }
 
                 if (outputPath == null)
                 {
-                    file.Status = ProcessStatus.Error;
+                    file.Status = ProcessStatus.Cancelled;
                     file.ErrorMessage = AppStrings.Error_Cancelled;
                     done++;
                     continue;
@@ -265,14 +309,16 @@ public class ConvertViewModel : BaseViewModel
                     TotalProgress = (done + p.Percent) / Files.Count * 100;
                 });
 
-                var (success, _) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
+                var (success, error) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
                 file.Status = success ? ProcessStatus.Done : ProcessStatus.Error;
-                if (!success)
-                    file.ErrorMessage = AppStrings.Error_FfmpegFailed;
+                if (success)
+                    _lastOutputDir = System.IO.Path.GetDirectoryName(outputPath);
+                else
+                    file.ErrorMessage = $"{AppStrings.Error_FfmpegFailed}\n{error}";
             }
             catch (OperationCanceledException)
             {
-                file.Status = ProcessStatus.Error;
+                file.Status = ProcessStatus.Cancelled;
                 file.ErrorMessage = AppStrings.Error_Cancelled;
                 break;
             }
@@ -291,6 +337,8 @@ public class ConvertViewModel : BaseViewModel
             Files.Count(f => f.Status == ProcessStatus.Done),
             Files.Count(f => f.Status == ProcessStatus.Error)
         );
+        OnPropertyChanged(nameof(LastOutputDir));
+        OnPropertyChanged(nameof(HasOutput));
         IsRunning = false;
     }
 
@@ -302,7 +350,9 @@ public class ConvertViewModel : BaseViewModel
         string encodeMode,
         string hwEncoder,
         int crf,
-        string subtitleMode
+        string subtitleMode,
+        int gifFps = 15,
+        int gifScale = 480
     )
     {
         var isVideo = VideoExts.Contains(Path.GetExtension(inputPath).ToLowerInvariant());
@@ -347,21 +397,21 @@ public class ConvertViewModel : BaseViewModel
                 _ => sw,
             };
 
-        string QualityOpt() =>
-            encodeMode == "ロスレス (-crf 0)"
-                ? (hwEncoder == "自動 (CPU)" ? "-crf 0" : "-cq 0")
-                : (hwEncoder == "自動 (CPU)" ? $"-crf {crf}" : $"-cq {crf}");
-
-        var subOpt = subtitleMode == "削除 (-sn)" ? "-sn" : "-c:s copy";
-
-        List<string> Args(string vc, string ac, string? extra = null)
+        (string flag, string value) QualityOpt()
         {
-            var list = new List<string> { "-i", inputPath, "-c:v", vc };
-            list.AddRange(QualityOpt().Split(' '));
-            list.AddRange(["-c:a", ac]);
-            list.AddRange(subOpt.Split(' '));
-            if (extra != null)
-                list.AddRange(extra.Split(' '));
+            var flag = hwEncoder == "自動 (CPU)" ? "-crf" : "-cq";
+            var value = encodeMode == "ロスレス (-crf 0)" ? "0" : crf.ToString();
+            return (flag, value);
+        }
+
+        List<string> Args(string vc, string ac)
+        {
+            var (qFlag, qVal) = QualityOpt();
+            var list = new List<string> { "-i", inputPath, "-c:v", vc, qFlag, qVal, "-c:a", ac };
+            if (subtitleMode == "削除 (-sn)")
+                list.Add("-sn");
+            else
+                list.AddRange(["-c:s", "copy"]);
             return list;
         }
 
@@ -383,15 +433,12 @@ public class ConvertViewModel : BaseViewModel
                 ".mov",
                 Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
             ),
-            "webm" => (
-                ".webm",
-                Args(VideoCodec("libvpx-vp9", "vp9_nvenc", "vp9_amf", "vp9_qsv"), "libopus")
-            ),
+            "webm" => (".webm", Args("libvpx-vp9", "libopus")),
             "avi" => (
                 ".avi",
                 Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")
             ),
-            "gif" => (".gif", ["-i", inputPath, "-vf", "fps=15,scale=480:-1:flags=lanczos"]),
+            "gif" => (".gif", ["-i", inputPath, "-vf", $"fps={gifFps},scale={gifScale}:-1:flags=lanczos"]),
             "mp3" => (".mp3", ["-i", inputPath, "-c:a", "libmp3lame", "-q:a", "2"]),
             "aac" => (".aac", ["-i", inputPath, "-c:a", "aac", "-b:a", "192k"]),
             "wav" => (".wav", ["-i", inputPath, "-c:a", "pcm_s16le"]),
@@ -405,7 +452,7 @@ public class ConvertViewModel : BaseViewModel
             "bmp" => (".bmp", ["-i", inputPath]),
             "avif" => (".avif", ["-i", inputPath, "-c:v", "libaom-av1"]),
             "tiff" => (".tiff", ["-i", inputPath]),
-            _ => (".mp4", ["-i", inputPath, "-c:v", "libx264", $"-crf {crf}", "-c:a", "aac"]),
+            _ => (".mp4", ["-i", inputPath, "-c:v", "libx264", "-crf", crf.ToString(), "-c:a", "aac"]),
         };
     }
 

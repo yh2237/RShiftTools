@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace RShiftTools.Services;
 
@@ -30,6 +31,11 @@ public static class ProcessHelper
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(exePath) ?? string.Empty,
         };
+
+        if (redirectStdOut)
+            startInfo.StandardOutputEncoding = Encoding.UTF8;
+        if (redirectStdErr)
+            startInfo.StandardErrorEncoding = Encoding.UTF8;
 
         var exeDir = Path.GetDirectoryName(exePath) ?? string.Empty;
         var curPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;

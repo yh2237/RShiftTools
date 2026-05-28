@@ -9,11 +9,79 @@ public class CutViewModel : BaseViewModel
 {
     public MediaFile File { get; }
 
-    private static readonly HashSet<string> AnimatedImageExts = [".gif", ".webp"];
+    private static readonly HashSet<string> AnimatedImageExts = [".gif", ".webp", ".apng"];
     public bool IsAnimatedImage =>
         AnimatedImageExts.Contains(Path.GetExtension(File.FilePath).ToLowerInvariant());
     public bool IsPreviewAvailable =>
-        !Path.GetExtension(File.FilePath).Equals(".webp", StringComparison.OrdinalIgnoreCase);
+        !AnimatedImageExts.Contains(Path.GetExtension(File.FilePath).ToLowerInvariant());
+
+    private double _zoomLevel = 1.0;
+    private const double BasePixelsPerSecond = 80.0;
+    private double _minZoom = 0.1;
+    public double ZoomLevel
+    {
+        get => _zoomLevel;
+        set
+        {
+            _zoomLevel = Math.Max(_minZoom, Math.Min(100, value));
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(PixelsPerSecond));
+            OnPropertyChanged(nameof(TimelineWidth));
+            OnPropertyChanged(nameof(InPointPosition));
+            OnPropertyChanged(nameof(OutPointPosition));
+            OnPropertyChanged(nameof(CurrentPosition));
+            OnPropertyChanged(nameof(ZoomLabel));
+            ZoomChanged?.Invoke(_zoomLevel);
+        }
+    }
+    public double PixelsPerSecond => BasePixelsPerSecond * _zoomLevel;
+    public double TimelineWidth => TotalSeconds * PixelsPerSecond + 40;
+    public double InPointPosition => InPoint * PixelsPerSecond + 20;
+    public double OutPointPosition => OutPoint * PixelsPerSecond + 20;
+    public double CurrentPosition => _currentSeconds * PixelsPerSecond + 20;
+    public string ZoomLabel => $"{_zoomLevel:F1}x";
+
+    public void SetViewportWidth(double viewportWidth)
+    {
+        if (TotalSeconds > 0 && viewportWidth > 0)
+        {
+            _minZoom = (viewportWidth - 40) / (TotalSeconds * BasePixelsPerSecond);
+            if (_zoomLevel < _minZoom)
+                ZoomLevel = _minZoom;
+            else
+                OnPropertyChanged(nameof(ZoomLevel));
+        }
+    }
+
+    public void ZoomIn() => ZoomLevel *= 2.0;
+    public void ZoomOut() => ZoomLevel /= 2.0;
+    public void ZoomInAt(double anchorSeconds)
+    {
+        var oldPps = PixelsPerSecond;
+        ZoomIn();
+        var newPps = PixelsPerSecond;
+        var offset = (anchorSeconds * oldPps) - (anchorSeconds * newPps);
+        ScrollRequested?.Invoke(offset);
+    }
+    public void ZoomOutAt(double anchorSeconds)
+    {
+        var oldPps = PixelsPerSecond;
+        ZoomOut();
+        var newPps = PixelsPerSecond;
+        var offset = (anchorSeconds * oldPps) - (anchorSeconds * newPps);
+        ScrollRequested?.Invoke(offset);
+    }
+    public void ZoomToInOut()
+    {
+        if (OutPoint > InPoint && OutPoint - InPoint > 0.001)
+        {
+            var range = OutPoint - InPoint;
+            ZoomLevel = 750.0 / (range * BasePixelsPerSecond);
+        }
+    }
+
+    public event Action<double>? ZoomChanged;
+    public event Action<double>? ScrollRequested;
 
     private double _totalSeconds;
     public double TotalSeconds
@@ -105,7 +173,7 @@ public class CutViewModel : BaseViewModel
             OnPropertyChanged(nameof(PlayButtonText));
         }
     }
-    public string PlayButtonText => _isPlaying ? "⏸" : "▶";
+    public string PlayButtonText => _isPlaying ? "\uE769" : "\uE768";
 
     public List<double> SpeedOptions { get; } = [0.25, 0.5, 1.0, 1.5, 2.0];
     private double _playbackSpeed = 1.0;
@@ -134,10 +202,10 @@ public class CutViewModel : BaseViewModel
         }
     }
     public string VolumeIcon =>
-        _volume == 0 ? "🔇"
-        : _volume < 40 ? "🔈"
-        : _volume < 75 ? "🔉"
-        : "🔊";
+        _volume == 0 ? "\uE74F"
+        : _volume < 40 ? "\uE992"
+        : _volume < 75 ? "\uE993"
+        : "\uE994";
     public string VolumeText => $"{(int)_volume}%";
 
     private double _progress;
@@ -204,6 +272,19 @@ public class CutViewModel : BaseViewModel
 
     private CancellationTokenSource? _cts;
 
+    private string? _lastOutputDir;
+    public string? LastOutputDir
+    {
+        get => _lastOutputDir;
+        private set
+        {
+            _lastOutputDir = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasOutput));
+        }
+    }
+    public bool HasOutput => !string.IsNullOrEmpty(_lastOutputDir);
+
     public event Action<double>? SpeedChanged;
     public event Action<double>? VolumeChanged;
     public event Action? PlayRequested;
@@ -221,10 +302,15 @@ public class CutViewModel : BaseViewModel
     public async Task InitAsync()
     {
         var info = await App.Ffprobe.GetMediaInfoAsync(File.FilePath);
-        if (info != null)
+        if (info != null && info.DurationSeconds > 0)
         {
             TotalSeconds = info.DurationSeconds;
             OutPoint = info.DurationSeconds;
+        }
+        else if (IsAnimatedImage)
+        {
+            TotalSeconds = 60;
+            OutPoint = 60;
         }
     }
 
@@ -274,16 +360,27 @@ public class CutViewModel : BaseViewModel
             }
 
             var inStr = SecondsToText(_inPoint);
-            var duration = _outPoint - _inPoint;
+            var cutDuration = _outPoint - _inPoint;
+            var cutDurationStr = cutDuration.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
 
             List<string> argsList;
 
             if (AnimatedImageExts.Contains(ext))
             {
-                argsList = ["-y", "-ss", inStr, "-i", File.FilePath, "-t", duration.ToString("F3")];
-                if (ext == ".webp")
-                    argsList.AddRange(["-vcodec", "libwebp", "-loop", "0"]);
-                argsList.Add(outputPath);
+                argsList = ["-y", "-i", File.FilePath, "-ss", inStr, "-t", cutDurationStr];
+                if (ext == ".gif")
+                {
+                    argsList.Add(outputPath);
+                }
+                else if (ext == ".webp")
+                {
+                    argsList.AddRange(["-vcodec", "libwebp", "-loop", "0", "-lossless", "0"]);
+                    argsList.Add(outputPath);
+                }
+                else
+                {
+                    argsList.Add(outputPath);
+                }
             }
             else
             {
@@ -294,7 +391,9 @@ public class CutViewModel : BaseViewModel
                     "Intel (qsv)" => "h264_qsv",
                     _ => "libx264",
                 };
-                var hwQualityOpt = _hwEncoder == "自動 (CPU)" ? $"-crf {_crf}" : $"-cq {_crf}";
+                var (hwQualityFlag, hwQualityVal) = _hwEncoder == "自動 (CPU)"
+                    ? ("-crf", _crf.ToString())
+                    : ("-cq", _crf.ToString());
 
                 argsList =
                 [
@@ -304,11 +403,12 @@ public class CutViewModel : BaseViewModel
                     "-i",
                     File.FilePath,
                     "-t",
-                    duration.ToString("F3"),
+                    cutDurationStr,
                     "-c:v",
                     videoCodec,
+                    hwQualityFlag,
+                    hwQualityVal,
                 ];
-                argsList.AddRange(hwQualityOpt.Split(' ', StringSplitOptions.RemoveEmptyEntries));
                 argsList.AddRange(["-c:a", "aac", outputPath]);
             }
 
@@ -317,12 +417,14 @@ public class CutViewModel : BaseViewModel
                 Progress = p.Percent * 100;
             });
 
-            var (success, error) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
+            var (success, error) = await App.Ffmpeg.RunAsync(argsList, cutDuration, progress, token);
 
             StatusText = success
                 ? AppStrings.Status_Success
                 : $"{AppStrings.Status_Error}: {error}";
-            if (!success)
+            if (success)
+                LastOutputDir = System.IO.Path.GetDirectoryName(outputPath);
+            else
                 System.Windows.MessageBox.Show(error, AppStrings.AppName);
         }
         catch (OperationCanceledException)

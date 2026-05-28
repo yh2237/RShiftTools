@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows.Data;
 using RShiftTools.Models;
+using RShiftTools.Services;
 
 namespace RShiftTools.Converters;
 
@@ -10,10 +11,11 @@ public class StatusConverter : IValueConverter
         value is ProcessStatus s
             ? s switch
             {
-                ProcessStatus.Waiting => "待機中",
-                ProcessStatus.Processing => "処理中",
-                ProcessStatus.Done => "完了",
-                ProcessStatus.Error => "エラー",
+                ProcessStatus.Waiting => AppStrings.Status_Waiting,
+                ProcessStatus.Processing => AppStrings.Status_Processing,
+                ProcessStatus.Done => AppStrings.Status_Success,
+                ProcessStatus.Error => AppStrings.Status_Error,
+                ProcessStatus.Cancelled => AppStrings.Status_Cancelled,
                 _ => "",
             }
             : "";
@@ -23,5 +25,5 @@ public class StatusConverter : IValueConverter
         Type targetType,
         object parameter,
         CultureInfo culture
-    ) => throw new NotImplementedException();
+    ) => System.Windows.Data.Binding.DoNothing;
 }

@@ -22,12 +22,16 @@
                 <DataTrigger Binding="{Binding Status}" Value="Processing">
                     <Setter Property="Foreground" Value="#3498db" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Cancelled">
+                    <Setter Property="Foreground" Value="#f39c12" />
+                </DataTrigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -126,8 +130,63 @@
             </Grid>
         </Border>
 
-        <ListView
+        <Border
             Grid.Row="2"
+            Margin="0,0,0,8"
+            Padding="12,8"
+            BorderBrush="#f39c12"
+            BorderThickness="1">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsGifSelected}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock
+                    Grid.Column="0"
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    Text="{Binding GifFpsLabel}" />
+                <Slider
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    IsSnapToTickEnabled="True"
+                    Maximum="60"
+                    Minimum="1"
+                    TickFrequency="1"
+                    Value="{Binding GifFps}" />
+
+                <TextBlock
+                    Grid.Column="3"
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    Text="{Binding GifScaleLabel}" />
+                <Slider
+                    Grid.Column="4"
+                    VerticalAlignment="Center"
+                    IsSnapToTickEnabled="True"
+                    Maximum="1920"
+                    Minimum="64"
+                    TickFrequency="16"
+                    Value="{Binding GifScale}" />
+            </Grid>
+        </Border>
+
+        <ListView
+            Grid.Row="3"
             Margin="0,0,0,8"
             ItemsSource="{Binding Files}">
             <ListView.View>
@@ -154,7 +213,10 @@
                     <GridViewColumn Width="80" Header="状態">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Style="{StaticResource StatusTextStyle}" Text="{Binding Status, Converter={StaticResource StatusConverter}}" />
+                                <TextBlock
+                                    Style="{StaticResource StatusTextStyle}"
+                                    Text="{Binding Status, Converter={StaticResource StatusConverter}}"
+                                    ToolTip="{Binding ErrorMessage}" />
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
@@ -162,7 +224,7 @@
             </ListView.View>
         </ListView>
 
-        <StackPanel Grid.Row="3" Margin="0,0,0,8">
+        <StackPanel Grid.Row="4" Margin="0,0,0,8">
             <ProgressBar
                 Height="18"
                 Margin="0,0,0,4"
@@ -171,20 +233,25 @@
             <TextBlock Foreground="#555" Text="{Binding StatusText}" />
         </StackPanel>
 
-        <StackPanel
-            Grid.Row="4"
-            HorizontalAlignment="Right"
-            Orientation="Horizontal">
+        <Grid Grid.Row="5">
             <Button
-                Width="90"
-                Margin="0,0,8,0"
-                Click="CancelButton_Click"
-                Content="キャンセル" />
-            <Button
-                Width="90"
-                Click="RunButton_Click"
-                Content="変換開始"
-                IsEnabled="{Binding CanRun}" />
-        </StackPanel>
+                Width="130"
+                HorizontalAlignment="Left"
+                Click="OpenFolderButton_Click"
+                Content="フォルダを開く"
+                IsEnabled="{Binding HasOutput}" />
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                    Width="90"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click"
+                    Content="キャンセル" />
+                <Button
+                    Width="90"
+                    Click="RunButton_Click"
+                    Content="変換開始"
+                    IsEnabled="{Binding CanRun}" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

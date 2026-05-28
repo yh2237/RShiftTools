@@ -40,9 +40,9 @@ public class ResizeViewModel : BaseViewModel
                 return;
             _width = value;
             OnPropertyChanged();
-            if (IsAspectLocked && _sourceWidth > 0)
+            if (IsAspectLocked && _sourceWidth > 0 && _sourceHeight > 0)
             {
-                _height = _sourceAspect > 0 ? (int)Math.Round(value / _sourceAspect) : value;
+                _height = (int)Math.Round(value / _sourceAspect);
                 OnPropertyChanged(nameof(Height));
             }
         }
@@ -58,9 +58,9 @@ public class ResizeViewModel : BaseViewModel
                 return;
             _height = value;
             OnPropertyChanged();
-            if (IsAspectLocked && _sourceHeight > 0)
+            if (IsAspectLocked && _sourceWidth > 0 && _sourceHeight > 0)
             {
-                _width = _sourceAspect > 0 ? (int)Math.Round(value * _sourceAspect) : value;
+                _width = (int)Math.Round(value * _sourceAspect);
                 OnPropertyChanged(nameof(Width));
             }
         }
@@ -87,6 +87,20 @@ public class ResizeViewModel : BaseViewModel
         {
             _fitMode = value;
             OnPropertyChanged();
+        }
+    }
+
+    public ObservableCollection<string> HwEncoders { get; } =
+    ["自動 (CPU)", "NVIDIA (nvenc)", "AMD (amf)", "Intel (qsv)"];
+    private string _hwEncoder = UserSettings.HwEncoder;
+    public string HwEncoder
+    {
+        get => _hwEncoder;
+        set
+        {
+            _hwEncoder = value;
+            OnPropertyChanged();
+            UserSettings.HwEncoder = value;
         }
     }
 
@@ -127,21 +141,24 @@ public class ResizeViewModel : BaseViewModel
 
     private CancellationTokenSource? _cts;
 
+    private string? _lastOutputDir;
+    public string? LastOutputDir
+    {
+        get => _lastOutputDir;
+        private set
+        {
+            _lastOutputDir = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasOutput));
+        }
+    }
+    public bool HasOutput => !string.IsNullOrEmpty(_lastOutputDir);
+
     private int _sourceWidth;
     private int _sourceHeight;
-    private double _sourceAspect => _sourceHeight == 0 ? 1.0 : (double)_sourceWidth / _sourceHeight;
+    private double _sourceAspect => _sourceHeight == 0 ? 0.0 : (double)_sourceWidth / _sourceHeight;
 
-    private static readonly HashSet<string> ImageExts =
-    [
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".webp",
-        ".bmp",
-        ".tiff",
-        ".avif",
-    ];
+    private static readonly HashSet<string> ImageExts = MediaFormats.ImageExtensions;
 
     private readonly IDialogService _dialogService;
 
@@ -154,6 +171,8 @@ public class ResizeViewModel : BaseViewModel
 
     public async Task InitAsync()
     {
+        if (Files.Count == 0)
+            return;
         var info = await App.Ffprobe.GetMediaInfoAsync(Files[0].FilePath);
         if (info != null && info.Width > 0)
         {
@@ -192,7 +211,7 @@ public class ResizeViewModel : BaseViewModel
         if (w == 0)
             return;
 
-        if (IsAspectLocked && _sourceWidth > 0)
+        if (IsAspectLocked && _sourceWidth > 0 && _sourceHeight > 0)
         {
             _width = w;
             _height = (int)Math.Round(w / _sourceAspect);
@@ -213,6 +232,27 @@ public class ResizeViewModel : BaseViewModel
         var token = _cts.Token;
         var done = 0;
 
+        string? multiOutputDir = null;
+        if (Files.Count > 1)
+        {
+            var suggestedDir =
+                System.IO.Path.GetDirectoryName(Files[0].FilePath) ?? "";
+            multiOutputDir = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                () => _dialogService.AskOutputFolder(suggestedDir)
+            );
+            if (multiOutputDir == null)
+            {
+                foreach (var f in Files)
+                {
+                    f.Status = ProcessStatus.Cancelled;
+                    f.ErrorMessage = AppStrings.Error_Cancelled;
+                }
+                StatusText = AppStrings.Status_Waiting;
+                IsRunning = false;
+                return;
+            }
+        }
+
         foreach (var file in Files)
         {
             if (token.IsCancellationRequested)
@@ -232,14 +272,21 @@ public class ResizeViewModel : BaseViewModel
                 var vfFilter = BuildVfFilter(Width, Height, FitMode);
                 var ext = Path.GetExtension(file.FilePath).ToLowerInvariant();
 
-                var outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
-                    () =>
-                        _dialogService.AskOutputPath(file.FilePath, ext)
-                );
+                string? outputPath;
+                if (multiOutputDir != null)
+                {
+                    outputPath = BuildUniqueOutputPath(multiOutputDir, file.FilePath, ext);
+                }
+                else
+                {
+                    outputPath = await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                        () => _dialogService.AskOutputPath(file.FilePath, ext)
+                    );
+                }
 
                 if (outputPath == null)
                 {
-                    file.Status = ProcessStatus.Error;
+                    file.Status = ProcessStatus.Cancelled;
                     file.ErrorMessage = AppStrings.Error_Cancelled;
                     done++;
                     continue;
@@ -251,6 +298,14 @@ public class ResizeViewModel : BaseViewModel
                     {
                         "-i",
                         file.FilePath,
+                        "-c:v",
+                        _hwEncoder switch
+                        {
+                            "NVIDIA (nvenc)" => "h264_nvenc",
+                            "AMD (amf)" => "h264_amf",
+                            "Intel (qsv)" => "h264_qsv",
+                            _ => "libx264",
+                        },
                         "-vf",
                         vfFilter,
                         "-c:a",
@@ -271,12 +326,14 @@ public class ResizeViewModel : BaseViewModel
                     token
                 );
                 file.Status = success ? ProcessStatus.Done : ProcessStatus.Error;
-                if (!success)
+                if (success)
+                    _lastOutputDir = System.IO.Path.GetDirectoryName(outputPath);
+                else
                     file.ErrorMessage = $"{AppStrings.Error_FfmpegFailed}\n{error}";
             }
             catch (OperationCanceledException)
             {
-                file.Status = ProcessStatus.Error;
+                file.Status = ProcessStatus.Cancelled;
                 file.ErrorMessage = AppStrings.Error_Cancelled;
                 break;
             }
@@ -295,6 +352,8 @@ public class ResizeViewModel : BaseViewModel
             Files.Count(f => f.Status == ProcessStatus.Done),
             Files.Count(f => f.Status == ProcessStatus.Error)
         );
+        OnPropertyChanged(nameof(LastOutputDir));
+        OnPropertyChanged(nameof(HasOutput));
         IsRunning = false;
     }
 
@@ -306,7 +365,7 @@ public class ResizeViewModel : BaseViewModel
             "stretch（そのまま）" => $"scale={width}:{height}",
             "fill（クロップ）" =>
                 $"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}",
-            _ => // fit（letterbox）
+            _ =>
                 $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
         };
 }

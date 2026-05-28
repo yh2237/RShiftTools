@@ -1,4 +1,6 @@
-﻿using System.IO;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
 using System.Windows;
 using RShiftTools.Services;
 
@@ -28,35 +30,44 @@ public partial class App : Application
 
         if (args.Contains("--install"))
         {
+            var allUsers = args.Contains("--allusers");
             try
             {
-                var allUsers = args.Contains("--allusers");
                 RegistryService.Register(AppContext.BaseDirectory, allUsers: allUsers);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"レジストリへの登録に失敗しました。\n{ex.Message}",
+                    AppStrings.AppName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+                Shutdown(1);
+                return;
+            }
             Shutdown(0);
             return;
         }
 
         if (args.Contains("--uninstall"))
         {
-            if (args.Contains("--allusers"))
-            {
-                try
-                {
-                    RegistryService.Unregister(allUsers: true);
-                }
-                catch { }
-                Shutdown(0);
-                return;
-            }
-
+            var allUsers = args.Contains("--allusers");
             try
             {
-                var allUsers = args.Contains("--allusers");
                 RegistryService.Unregister(allUsers: allUsers);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"レジストリからの削除に失敗しました。\n{ex.Message}",
+                    AppStrings.AppName,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+                Shutdown(1);
+                return;
+            }
             Shutdown(0);
             return;
         }
@@ -73,6 +84,12 @@ public partial class App : Application
             return;
         }
 
+        if (!UserSettings.Initialized)
+        {
+            UserSettings.HwEncoder = DetectHardwareEncoder(FfmpegPath);
+            UserSettings.Initialized = true;
+        }
+
         if (files.Count == 0 && mode != null)
         {
             MessageBox.Show(
@@ -85,26 +102,14 @@ public partial class App : Application
             return;
         }
 
-        Window? window = mode switch
+        Window window = mode switch
         {
             "convert" => new Views.ConvertDialog(files),
             "resize" => new Views.ResizeDialog(files),
             "cut" => new Views.CutDialog(files),
             "compress" => new Views.CompressDialog(files),
-            _ => null, // 設定画面（未実装）
+            _ => new Views.MainWindow(),
         };
-
-        if (window == null)
-        {
-            MessageBox.Show(
-                string.Format(AppStrings.Error_ModeNotImplemented, mode),
-                AppStrings.AppName,
-                MessageBoxButton.OK,
-                MessageBoxImage.Information
-            );
-            Shutdown(0);
-            return;
-        }
 
         try
         {
@@ -114,8 +119,9 @@ public partial class App : Application
         {
             MessageBox.Show(
                 string.Format(AppStrings.Error_WindowStartupFailed, ex.Message, ex.StackTrace),
-                "エラー"
+                AppStrings.AppName
             );
+            Shutdown(1);
         }
     }
 
@@ -132,13 +138,67 @@ public partial class App : Application
         if (idx < 0)
             return files;
 
-        for (var i = idx + 1; i < args.Length; i++)
+        var start = idx + 1;
+        for (var i = start; i < args.Length; i++)
         {
             if (args[i].StartsWith("--"))
                 break;
             if (File.Exists(args[i]))
                 files.Add(args[i]);
         }
+
+        if (files.Count > 0)
+            return files;
+
+        var commandLine = Environment.CommandLine;
+        var marker = " --files ";
+        var markerIdx = commandLine.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIdx < 0)
+            return files;
+
+        var rawFilesPart = commandLine[(markerIdx + marker.Length)..];
+        var argsMarkerInRaw = rawFilesPart.IndexOf(" --", StringComparison.Ordinal);
+        if (argsMarkerInRaw >= 0)
+            rawFilesPart = rawFilesPart[..argsMarkerInRaw];
+
+        rawFilesPart = rawFilesPart.Trim();
+        if (string.IsNullOrWhiteSpace(rawFilesPart))
+            return files;
+
+        var expanded = ProcessHelper.SplitCommandLinePublic(rawFilesPart);
+        foreach (var token in expanded)
+        {
+            if (File.Exists(token))
+                files.Add(token);
+        }
+
         return files;
+    }
+
+    private static string DetectHardwareEncoder(string ffmpegPath)
+    {
+        try
+        {
+            using var process = ProcessHelper.StartProcess(
+                ffmpegPath,
+                new[] { "-hide_banner", "-encoders" },
+                redirectStdOut: true,
+                redirectStdErr: false
+            );
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            if (output.Contains("h264_nvenc"))
+                return "NVIDIA (nvenc)";
+            if (output.Contains("h264_amf"))
+                return "AMD (amf)";
+            if (output.Contains("h264_qsv"))
+                return "Intel (qsv)";
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"HW encoder detection failed: {ex.Message}");
+        }
+        return "自動 (CPU)";
     }
 }

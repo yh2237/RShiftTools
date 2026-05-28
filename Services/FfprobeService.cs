@@ -17,6 +17,8 @@ public class MediaInfo
     public string AudioCodec { get; init; } = "";
     public double VideoFrameRate { get; init; }
     public int AudioSampleRate { get; init; }
+    public int AudioBitrateKbps { get; init; }
+    public int TotalBitrateKbps { get; init; }
     public MediaType Type { get; init; }
 }
 
@@ -31,29 +33,8 @@ public enum MediaType
 public class FfprobeService
 {
     private readonly string _ffprobePath;
-    private static readonly HashSet<string> ImageExts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg",
-        ".jpeg",
-        ".png",
-        ".gif",
-        ".webp",
-        ".bmp",
-        ".tiff",
-        ".avif",
-    };
-
-    private static readonly HashSet<string> AudioExts = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp3",
-        ".aac",
-        ".wav",
-        ".flac",
-        ".ogg",
-        ".m4a",
-        ".opus",
-        ".wma",
-    };
+    private static readonly HashSet<string> ImageExts = MediaFormats.ImageExtensions;
+    private static readonly HashSet<string> AudioExts = MediaFormats.AudioExtensions;
 
     public FfprobeService(string ffprobePath)
     {
@@ -62,9 +43,6 @@ public class FfprobeService
 
     public async Task<MediaInfo?> GetMediaInfoAsync(string filePath)
     {
-        var args = $"-v quiet -print_format json -show_format -show_streams \"{filePath}\"";
-
-        Log.Debug($"Starting ffprobe: {_ffprobePath} {args}");
         var argList = new List<string>
         {
             "-v",
@@ -75,6 +53,7 @@ public class FfprobeService
             "-show_streams",
             filePath,
         };
+        Log.Debug($"Starting ffprobe: {_ffprobePath} {string.Join(' ', argList)}");
         using var process = ProcessHelper.StartProcess(
             _ffprobePath,
             argList,
@@ -125,12 +104,28 @@ public class FfprobeService
                 out fileSizeBytes
             );
 
+        var totalBitrateKbps = 0;
+        if (
+            format.TryGetProperty("bit_rate", out var bitRate)
+            && bitRate.ValueKind == JsonValueKind.String
+            && long.TryParse(
+                bitRate.GetString(),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var totalBitrateBps
+            )
+        )
+        {
+            totalBitrateKbps = (int)Math.Max(0, totalBitrateBps / 1000);
+        }
+
         var streams = root.GetProperty("streams");
         string videoCodec = "",
             audioCodec = "";
         int width = 0,
             height = 0,
             audioSampleRate = 0;
+        var audioBitrateKbps = 0;
         double frameRate = 0;
 
         foreach (var stream in streams.EnumerateArray())
@@ -191,6 +186,20 @@ public class FfprobeService
                         CultureInfo.InvariantCulture,
                         out audioSampleRate
                     );
+
+                if (
+                    stream.TryGetProperty("bit_rate", out var abr)
+                    && abr.ValueKind == JsonValueKind.String
+                    && long.TryParse(
+                        abr.GetString(),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var audioBitrateBps
+                    )
+                )
+                {
+                    audioBitrateKbps = (int)Math.Max(0, audioBitrateBps / 1000);
+                }
             }
         }
 
@@ -207,6 +216,8 @@ public class FfprobeService
             AudioCodec = audioCodec,
             VideoFrameRate = frameRate,
             AudioSampleRate = audioSampleRate,
+            AudioBitrateKbps = audioBitrateKbps,
+            TotalBitrateKbps = totalBitrateKbps,
             Type = type,
         };
     }

@@ -22,10 +22,10 @@ public static class RegistryService
 
         var modes = new (string mode, string label)[]
         {
-            ("convert", "変換..."),
-            ("resize", "リサイズ..."),
-            ("cut", "カット..."),
-            ("compress", "サイズ圧縮..."),
+            ("convert", AppStrings.Menu_Convert),
+            ("resize", AppStrings.Menu_Resize),
+            ("cut", AppStrings.Menu_Cut),
+            ("compress", AppStrings.Menu_Compress),
         };
 
         foreach (var (mode, label) in modes)
@@ -39,23 +39,39 @@ public static class RegistryService
 
     public static void Unregister(bool allUsers = false)
     {
-        try
+        if (allUsers)
         {
-            if (allUsers)
+            try
             {
                 Registry.ClassesRoot.DeleteSubKeyTree(
                     $@"*\shell\{AppStrings.AppName}",
                     throwOnMissingSubKey: false
                 );
             }
-            else
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to unregister from HKCR: {ex.Message}");
+                throw new InvalidOperationException("HKCRからの削除に失敗しました。", ex);
+            }
+        }
+        else
+        {
+            try
             {
                 Registry.CurrentUser.DeleteSubKeyTree(
                     $@"Software\Classes\*\shell\{AppStrings.AppName}",
                     throwOnMissingSubKey: false
                 );
             }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to unregister from HKCU: {ex.Message}");
+                throw new InvalidOperationException("HKCUからの削除に失敗しました。", ex);
+            }
         }
-        catch { }
     }
 }

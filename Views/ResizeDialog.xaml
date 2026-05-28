@@ -22,6 +22,9 @@
                 <DataTrigger Binding="{Binding Status}" Value="Processing">
                     <Setter Property="Foreground" Value="#3498db" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="Cancelled">
+                    <Setter Property="Foreground" Value="#f39c12" />
+                </DataTrigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
@@ -53,6 +56,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock
@@ -79,6 +83,7 @@
                     Grid.Row="1"
                     Grid.Column="1"
                     Margin="0,0,8,6"
+                    PreviewTextInput="NumericTextBox_PreviewTextInput"
                     Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}" />
                 <TextBlock
                     Grid.Row="1"
@@ -90,6 +95,7 @@
                     Grid.Row="1"
                     Grid.Column="3"
                     Margin="0,0,8,6"
+                    PreviewTextInput="NumericTextBox_PreviewTextInput"
                     Text="{Binding Height, UpdateSourceTrigger=PropertyChanged}" />
                 <CheckBox
                     Grid.Row="1"
@@ -112,6 +118,20 @@
                     Grid.ColumnSpan="5"
                     ItemsSource="{Binding FitModes}"
                     SelectedItem="{Binding FitMode}" />
+
+                <TextBlock
+                    Grid.Row="3"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="ハードウェア：" />
+                <ComboBox
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="5"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding HwEncoders}"
+                    SelectedItem="{Binding HwEncoder}" />
             </Grid>
         </Border>
 
@@ -143,7 +163,10 @@
                     <GridViewColumn Width="80" Header="状態">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Style="{StaticResource StatusTextStyle}" Text="{Binding Status, Converter={StaticResource StatusConverter}}" />
+                                <TextBlock
+                                    Style="{StaticResource StatusTextStyle}"
+                                    Text="{Binding Status, Converter={StaticResource StatusConverter}}"
+                                    ToolTip="{Binding ErrorMessage}" />
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
@@ -160,20 +183,25 @@
             <TextBlock Foreground="#555" Text="{Binding StatusText}" />
         </StackPanel>
 
-        <StackPanel
-            Grid.Row="3"
-            HorizontalAlignment="Right"
-            Orientation="Horizontal">
+        <Grid Grid.Row="3">
             <Button
-                Width="90"
-                Margin="0,0,8,0"
-                Click="CancelButton_Click"
-                Content="キャンセル" />
-            <Button
-                Width="90"
-                Click="RunButton_Click"
-                Content="リサイズ開始"
-                IsEnabled="{Binding CanRun}" />
-        </StackPanel>
+                Width="130"
+                HorizontalAlignment="Left"
+                Click="OpenFolderButton_Click"
+                Content="フォルダを開く"
+                IsEnabled="{Binding HasOutput}" />
+            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                    Width="90"
+                    Margin="0,0,8,0"
+                    Click="CancelButton_Click"
+                    Content="キャンセル" />
+                <Button
+                    Width="90"
+                    Click="RunButton_Click"
+                    Content="リサイズ開始"
+                    IsEnabled="{Binding CanRun}" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

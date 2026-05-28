@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -11,13 +13,20 @@ public partial class CutDialog : Window
 {
     private readonly CutViewModel _vm;
     private readonly DispatcherTimer _timer;
-    private bool _isDraggingSlider = false;
+    private bool _isDraggingSlider;
+    private DateTime _lastSeekTime;
+    private readonly TimeSpan _seekThrottle = TimeSpan.FromMilliseconds(50);
 
     public CutDialog(List<string> files)
     {
         InitializeComponent();
         _vm = new CutViewModel(files[0], new DialogService());
         DataContext = _vm;
+
+        if (_vm.IsPreviewAvailable)
+            MediaPlayer.Source = new Uri(_vm.File.FilePath);
+        else
+            PreviewUnavailableMsg.Visibility = Visibility.Visible;
 
         _vm.PlayRequested += () => MediaPlayer.Play();
         _vm.PauseRequested += () => MediaPlayer.Pause();
@@ -26,146 +35,225 @@ public partial class CutDialog : Window
             MediaPlayer.Position = TimeSpan.FromSeconds(seconds);
             UpdateMarkers();
         };
-        _vm.SpeedChanged += speed => MediaPlayer.SpeedRatio = speed;
-        _vm.VolumeChanged += volume => MediaPlayer.Volume = volume;
+        _vm.VolumeChanged += vol => MediaPlayer.Volume = vol;
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
-        _timer.Tick += (_, _) =>
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Normal, OnTimerTick, Dispatcher);
+        _timer.Stop();
+
+        _vm.SpeedChanged += speed =>
         {
-            if (!_isDraggingSlider && _vm.IsPlaying)
-            {
-                _vm.CurrentSeconds = MediaPlayer.Position.TotalSeconds;
-                UpdateMarkers();
-            }
+            MediaPlayer.SpeedRatio = speed;
+            _timer.Interval = TimeSpan.FromMilliseconds(100.0 / speed);
         };
-        _timer.Start();
 
-        MediaPlayer.Volume = _vm.Volume / 100.0;
+        PreviewKeyDown += OnKeyDown;
+        Focusable = true;
 
-        if (_vm.IsPreviewAvailable)
+        Loaded += async (_, _) =>
         {
-            MediaPlayer.Source = new Uri(files[0], UriKind.Absolute);
-            MediaPlayer.Pause();
-        }
-        else
+            await _vm.InitAsync();
+            UpdateMarkers();
+        };
+    }
+
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_isDraggingSlider) return;
+        var step = 1.0 / 30.0;
+        if (Keyboard.IsKeyDown(Key.LeftShift)) step = 1.0;
+
+        switch (e.Key)
         {
-            MediaPlayer.Visibility = Visibility.Collapsed;
-            PreviewUnavailableMsg.Visibility = Visibility.Visible;
+            case Key.Left:
+                SeekTo(Math.Max(0, _vm.CurrentSeconds - step));
+                e.Handled = true;
+                break;
+            case Key.Right:
+                SeekTo(Math.Min(_vm.TotalSeconds, _vm.CurrentSeconds + step));
+                e.Handled = true;
+                break;
+            case Key.Space:
+                _vm.TogglePlay();
+                if (_vm.IsPlaying) _timer.Start(); else _timer.Stop();
+                e.Handled = true;
+                break;
+            case Key.I:
+                _vm.SetInPoint();
+                UpdateMarkers();
+                e.Handled = true;
+                break;
+            case Key.O:
+                _vm.SetOutPoint();
+                UpdateMarkers();
+                e.Handled = true;
+                break;
         }
     }
 
-    protected override async void OnContentRendered(EventArgs e)
+    private void SeekTo(double seconds)
     {
-        base.OnContentRendered(e);
-        await _vm.InitAsync();
+        _vm.Seek(seconds);
+        MediaPlayer.Position = TimeSpan.FromSeconds(seconds);
+        UpdateMarkers();
     }
 
-    private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e) => UpdateMarkers();
-
-    private void MediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
+    private void OnTimerTick(object? sender, EventArgs e)
     {
-        _vm.IsPlaying = false;
+        if (!_isDraggingSlider && MediaPlayer.NaturalDuration.HasTimeSpan)
+            _vm.CurrentSeconds = MediaPlayer.Position.TotalSeconds;
+    }
+
+    private void UpdateMarkers()
+    {
+        var trackWidth = SeekSlider.ActualWidth;
+        if (trackWidth <= 0 || _vm.TotalSeconds <= 0) return;
+
+        var inPos = _vm.InPoint / _vm.TotalSeconds * trackWidth;
+        var outPos = _vm.OutPoint / _vm.TotalSeconds * trackWidth;
+
+        Canvas.SetLeft(InMarker, inPos);
+        Canvas.SetLeft(OutMarker, outPos);
+    }
+
+    private DispatcherTimer? _initTimer;
+
+    private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
+    {
+        if (MediaPlayer.NaturalDuration.HasTimeSpan)
+        {
+            _vm.TotalSeconds = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
+            _vm.OutPoint = _vm.TotalSeconds;
+        }
+        MediaPlayer.Play();
+        _initTimer?.Stop();
+        _initTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(200), DispatcherPriority.Normal, OnInitTimerTick, Dispatcher);
+        _initTimer.Start();
+    }
+
+    private void OnInitTimerTick(object? sender, EventArgs e)
+    {
+        _initTimer?.Stop();
         MediaPlayer.Pause();
         MediaPlayer.Position = TimeSpan.Zero;
         _vm.CurrentSeconds = 0;
         UpdateMarkers();
     }
 
-    private void PlayPause_Click(object sender, RoutedEventArgs e) => _vm.TogglePlay();
-
-    private void ToStart_Click(object sender, RoutedEventArgs e) => _vm.Seek(0);
-
-    private void ToEnd_Click(object sender, RoutedEventArgs e) => _vm.Seek(_vm.TotalSeconds);
-
-    private void SetIn_Click(object sender, RoutedEventArgs e)
+    private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
     {
-        _vm.SetInPoint();
-        UpdateMarkers();
+        PreviewUnavailableMsg.Text = $"プレビュー読み込み失敗\n{e.ErrorException?.Message}";
+        PreviewUnavailableMsg.Visibility = Visibility.Visible;
     }
 
-    private void SetOut_Click(object sender, RoutedEventArgs e)
+    private void MediaPlayer_MediaEnded(object sender, RoutedEventArgs e)
     {
-        _vm.SetOutPoint();
+        _vm.IsPlaying = false;
+        _timer.Stop();
+        _vm.CurrentSeconds = 0;
+        MediaPlayer.Position = TimeSpan.Zero;
         UpdateMarkers();
     }
 
     private void SeekSlider_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         _isDraggingSlider = true;
-        SeekSlider.CaptureMouse();
-        SeekToPoint(sender as Slider, e.GetPosition((Slider)sender));
+        _timer.Stop();
+        MediaPlayer.Volume = 0;
+        _lastSeekTime = DateTime.MinValue;
+
+        var slider = (Slider)sender;
+        var point = e.GetPosition(slider);
+        var fraction = point.X / slider.ActualWidth;
+        var seconds = fraction * _vm.TotalSeconds;
+        SeekTo(Math.Max(0, Math.Min(seconds, _vm.TotalSeconds)));
     }
 
     private void SeekSlider_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isDraggingSlider)
-            return;
-        SeekToPoint(sender as Slider, e.GetPosition((Slider)sender));
+        if (!_isDraggingSlider || e.LeftButton != MouseButtonState.Pressed) return;
+
+        var slider = (Slider)sender;
+        var point = e.GetPosition(slider);
+        var fraction = point.X / slider.ActualWidth;
+        var seconds = Math.Max(0, Math.Min(fraction * _vm.TotalSeconds, _vm.TotalSeconds));
+
+        _vm.CurrentSeconds = seconds;
+        UpdateMarkers();
+
+        var now = DateTime.UtcNow;
+        if (now - _lastSeekTime > _seekThrottle)
+        {
+            _lastSeekTime = now;
+            MediaPlayer.Position = TimeSpan.FromSeconds(seconds);
+        }
     }
 
     private void SeekSlider_PreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isDraggingSlider)
-            return;
         _isDraggingSlider = false;
-        SeekSlider.ReleaseMouseCapture();
-        SeekToPoint(sender as Slider, e.GetPosition((Slider)sender));
-    }
-
-    private void SeekSlider_MouseLeave(object sender, MouseEventArgs e) { }
-
-    private void SeekToPoint(Slider? slider, Point point)
-    {
-        if (slider == null || slider.ActualWidth <= 0)
-            return;
-        var thumbWidth = 11.0;
-        var trackWidth = slider.ActualWidth - thumbWidth;
-        var ratio = Math.Max(0, Math.Min(1, (point.X - thumbWidth / 2) / trackWidth));
-        var newValue = slider.Minimum + ratio * (slider.Maximum - slider.Minimum);
-        _vm.CurrentSeconds = newValue;
-        MediaPlayer.Position = TimeSpan.FromSeconds(newValue);
+        MediaPlayer.Position = TimeSpan.FromSeconds(_vm.CurrentSeconds);
+        MediaPlayer.Volume = _vm.Volume / 100.0;
         UpdateMarkers();
+        if (_vm.IsPlaying) _timer.Start();
     }
+
+    private void PlayPause_Click(object sender, RoutedEventArgs e)
+    {
+        _vm.TogglePlay();
+        if (_vm.IsPlaying) _timer.Start(); else _timer.Stop();
+    }
+
+    private void ToStart_Click(object sender, RoutedEventArgs e) => SeekTo(_vm.InPoint);
+    private void ToEnd_Click(object sender, RoutedEventArgs e) => SeekTo(_vm.OutPoint);
+    private void FrameBack_Click(object sender, RoutedEventArgs e) => SeekTo(Math.Max(0, _vm.CurrentSeconds - 1.0 / 30.0));
+    private void FrameForward_Click(object sender, RoutedEventArgs e) => SeekTo(Math.Min(_vm.TotalSeconds, _vm.CurrentSeconds + 1.0 / 30.0));
+    private void SetIn_Click(object sender, RoutedEventArgs e) { _vm.SetInPoint(); UpdateMarkers(); }
+    private void SetOut_Click(object sender, RoutedEventArgs e) { _vm.SetOutPoint(); UpdateMarkers(); }
 
     private void TimeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter)
-            return;
-        var textBox = (TextBox)sender;
-        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
-        UpdateMarkers();
-        Keyboard.ClearFocus();
+        if (e.Key == Key.Enter)
+            (sender as TextBox)?.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
     }
 
     private void CurrentTimeTextBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter)
-            return;
-        var textBox = (TextBox)sender;
-        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
-        Keyboard.ClearFocus();
+        if (e.Key == Key.Enter)
+        {
+            if (double.TryParse((sender as TextBox)?.Text, out var s))
+                SeekTo(s);
+        }
     }
 
-    private void UpdateMarkers()
+    private async void RunButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.TotalSeconds <= 0)
-            return;
-        var w = SeekSlider.ActualWidth;
-        if (w <= 0)
-            return;
-        Canvas.SetLeft(InMarker, _vm.InPoint / _vm.TotalSeconds * w);
-        Canvas.SetLeft(OutMarker, _vm.OutPoint / _vm.TotalSeconds * w);
+        try { await _vm.RunAsync(); }
+        catch (Exception ex) { MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error); }
     }
-
-    private async void RunButton_Click(object sender, RoutedEventArgs e) => await _vm.RunAsync();
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _vm.Cancel();
 
-    protected override void OnClosed(EventArgs e)
+    private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!string.IsNullOrEmpty(_vm.LastOutputDir))
+            Process.Start("explorer.exe", _vm.LastOutputDir);
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (_vm.IsRunning)
+        {
+            if (MessageBox.Show("処理中です。キャンセルして閉じますか？", AppStrings.AppName,
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
+                _vm.Cancel();
+            else
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
         _timer.Stop();
-        MediaPlayer.Stop();
-        MediaPlayer.Source = null;
-        base.OnClosed(e);
+        _initTimer?.Stop();
+        base.OnClosing(e);
     }
 }

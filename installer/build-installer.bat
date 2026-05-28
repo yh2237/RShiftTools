@@ -1,28 +1,51 @@
 @echo off
 chcp 65001
-echo ===== RShiftTools ビルド =====
+echo ===== インストーラー ビルド =====
 
-echo [1/2] dotnet publish 中...
 cd /d "%~dp0.."
-dotnet publish RShiftTools.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o bin/Release/net8.0-windows/publish
-if %errorlevel% neq 0 (
-    echo [エラー] dotnet publish に失敗しました
+
+set PUBLISH_DIR=bin\Release\net8.0-windows\publish
+
+if not exist "%PUBLISH_DIR%\rshiftt.exe" (
+    echo アプリがビルドされていません。先に build-app.bat を実行してください。
     pause
     exit /b 1
 )
-echo [完了] dotnet publish 成功
 
 echo ffmpeg をコピー中...
-copy /Y "bin\Debug\net8.0-windows\ffmpeg.exe"  "bin\Release\net8.0-windows\publish\ffmpeg.exe"
-copy /Y "bin\Debug\net8.0-windows\ffprobe.exe" "bin\Release\net8.0-windows\publish\ffprobe.exe"
-copy /Y "bin\Debug\net8.0-windows\ffplay.exe"  "bin\Release\net8.0-windows\publish\ffplay.exe"
-for %%f in ("bin\Debug\net8.0-windows\*.dll") do (
-    copy /Y "%%f" "bin\Release\net8.0-windows\publish\"
+copy /Y "redist\ffmpeg.exe"  "%PUBLISH_DIR%\ffmpeg.exe"
+copy /Y "redist\ffprobe.exe" "%PUBLISH_DIR%\ffprobe.exe"
+copy /Y "redist\ffplay.exe"  "%PUBLISH_DIR%\ffplay.exe"
+for %%f in ("redist\*.dll") do (
+    copy /Y "%%f" "%PUBLISH_DIR%\"
+)
+copy /Y "redist\ffmpeg-license.txt" "%PUBLISH_DIR%\ffmpeg-license.txt"
+copy /Y "redist\gpl-3.0.txt"       "%PUBLISH_DIR%\gpl-3.0.txt"
+
+echo NSIS ビルド中...
+cd /d "%~dp0"
+
+set NSIS_EXE=
+if exist "C:\Program Files (x86)\NSIS\makensis.exe" (
+    set "NSIS_EXE=C:\Program Files (x86)\NSIS\makensis.exe"
+) else if exist "C:\Program Files\NSIS\makensis.exe" (
+    set "NSIS_EXE=C:\Program Files\NSIS\makensis.exe"
+) else (
+    for /f "tokens=*" %%i in ('where makensis 2^>nul') do (
+        set "NSIS_EXE=%%i"
+        goto :nsis_found
+    )
 )
 
-echo [2/2] NSIS ビルド中...
-cd installer
-"C:\Program Files (x86)\NSIS\makensis.exe" RShiftTools.nsi
+:nsis_found
+if "%NSIS_EXE%"=="" (
+    echo [エラー] makensis.exe が見つかりません。NSIS をインストールしてください。
+    echo          https://nsis.sourceforge.io/Download
+    pause
+    exit /b 1
+)
+
+"%NSIS_EXE%" RShiftTools.nsi
 if %errorlevel% neq 0 (
     echo [エラー] NSIS ビルドに失敗しました
     pause

@@ -14,12 +14,23 @@ public class DialogService : IDialogService
         var dialog = new SaveFileDialog
         {
             InitialDirectory = dir,
-            FileName = nameWithoutExt + ext,
+            FileName = nameWithoutExt + "_out" + ext,
             DefaultExt = ext,
             Filter = $"出力ファイル (*{ext})|*{ext}|すべてのファイル (*.*)|*.*",
             OverwritePrompt = true,
         };
 
         return dialog.ShowDialog() == true ? dialog.FileName : null;
+    }
+
+    public string? AskOutputFolder(string suggestedDir)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "出力フォルダを選択してください",
+            InitialDirectory = suggestedDir,
+        };
+
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 }

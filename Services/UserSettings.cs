@@ -23,6 +23,18 @@ public static class UserSettings
         }
     }
 
+    public static bool Initialized
+    {
+        get => _data.Initialized;
+        set
+        {
+            _data.Initialized = value;
+            Save();
+        }
+    }
+
+    public static void SaveNow() => Save();
+
     private static SettingsData Load()
     {
         try
@@ -39,20 +51,25 @@ public static class UserSettings
 
     private static void Save()
     {
+        var json = JsonSerializer.Serialize(
+            _data,
+            new JsonSerializerOptions { WriteIndented = true }
+        );
+        var path = _path;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            var json = JsonSerializer.Serialize(
-                _data,
-                new JsonSerializerOptions { WriteIndented = true }
-            );
-            File.WriteAllText(_path, json);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, json);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to save settings: {ex.Message}");
+        }
     }
 
     private sealed class SettingsData
     {
         public string HwEncoder { get; set; } = "自動 (CPU)";
+        public bool Initialized { get; set; }
     }
 }

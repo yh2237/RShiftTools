@@ -39,6 +39,19 @@ public static class Log
                 $"{DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)} [{level}] {message}";
             lock (_lock)
             {
+                const long maxSize = 1024 * 1024;
+                try
+                {
+                    var info = new FileInfo(_logPath);
+                    if (info.Exists && info.Length > maxSize)
+                    {
+                        var backup = _logPath + ".old";
+                        if (File.Exists(backup)) File.Delete(backup);
+                        File.Move(_logPath, backup);
+                    }
+                }
+                catch { }
+
                 File.AppendAllText(_logPath, line + Environment.NewLine);
             }
         }

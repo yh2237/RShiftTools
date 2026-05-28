@@ -14,6 +14,4 @@ public interface IFfmpegService
         IProgress<RShiftTools.Models.FfmpegProgress>? onProgress = null,
         CancellationToken cancellationToken = default
     );
-    static string ResolveOutputPath(string inputPath, string newExtension, bool overwrite) =>
-        FfmpegService.ResolveOutputPath(inputPath, newExtension, overwrite);
 }
