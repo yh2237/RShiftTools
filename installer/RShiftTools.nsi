@@ -69,7 +69,7 @@ Function CreateScopePage
   ${NSD_CreateRadioButton} 0 20 100% 12u "現在のユーザーのみ"
   Pop $RADIO_USER
 
-  ${NSD_CreateRadioButton} 0 40 100% 12u "すべてのユーザー (管理者権限が必要)"
+  ${NSD_CreateRadioButton} 0 40 100% 12u "すべてのユーザー"
   Pop $RADIO_ALL
 
   ${NSD_SetState} $RADIO_USER ${BST_CHECKED}
