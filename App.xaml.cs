@@ -75,10 +75,10 @@ public partial class App : Application
 
         if (mode != null && files.Count > 0)
         {
-            // var collected = CollectFromSiblingInstances(mode, files);
-            // if (collected == null)
-            //     return;
-            // files = collected;
+            var collected = CollectFromSiblingInstances(mode, files);
+            if (collected == null)
+                return;
+            files = collected;
         }
 
         if (!File.Exists(FfmpegPath) || !File.Exists(FfprobePath))
@@ -138,7 +138,7 @@ public partial class App : Application
     {
         var pipeName = $"RShiftTools_{mode}";
         var sessionId = Environment.ProcessId;
-        var sessionKey = (DateTime.UtcNow.Ticks / 100000).ToString();
+        var sessionKey = (DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond).ToString();
         var sessionDir = Path.Combine(Path.GetTempPath(), "RShiftTools", pipeName + "_" + sessionKey);
 
         Directory.CreateDirectory(sessionDir);
@@ -153,7 +153,7 @@ public partial class App : Application
                 1
             );
 
-            Thread.Sleep(200);
+            Thread.Sleep(500);
 
             var allFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var f in Directory.GetFiles(sessionDir, "*.txt"))

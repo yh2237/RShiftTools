@@ -54,9 +54,7 @@ public partial class CutDialog : Window
 
         Loaded += async (_, _) =>
         {
-            Log.Debug("CutDialog Loaded - starting InitAsync");
             await _vm.InitAsync();
-            Log.Debug($"InitAsync completed. TotalSeconds={_vm.TotalSeconds}");
             UpdateMarkers();
 
             if (_vm.IsPreviewAvailable)
@@ -138,7 +136,6 @@ public partial class CutDialog : Window
 
     private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
     {
-        Log.Debug($"MediaOpened fired. HasTimeSpan={MediaPlayer.NaturalDuration.HasTimeSpan}");
         if (MediaPlayer.NaturalDuration.HasTimeSpan)
         {
             _vm.TotalSeconds = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
