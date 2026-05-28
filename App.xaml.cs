@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Windows;
 using RShiftTools.Services;
 
@@ -72,6 +73,14 @@ public partial class App : Application
             return;
         }
 
+        if (mode != null && files.Count > 0)
+        {
+            var collected = CollectFromSiblingInstances(mode, files);
+            if (collected == null)
+                return;
+            files = collected;
+        }
+
         if (!File.Exists(FfmpegPath) || !File.Exists(FfprobePath))
         {
             MessageBox.Show(
@@ -125,6 +134,77 @@ public partial class App : Application
         }
     }
 
+    private List<string>? CollectFromSiblingInstances(string mode, List<string> files)
+    {
+        var pipeName = $"RShiftTools_{mode}";
+        var sessionId = Environment.ProcessId;
+        var sessionDir = Path.Combine(Path.GetTempPath(), "RShiftTools", pipeName);
+
+        Directory.CreateDirectory(sessionDir);
+        var myFile = Path.Combine(sessionDir, $"{sessionId}.txt");
+        File.WriteAllLines(myFile, files.Where(File.Exists));
+
+        try
+        {
+            using var pipe = new System.IO.Pipes.NamedPipeServerStream(
+                pipeName,
+                System.IO.Pipes.PipeDirection.In,
+                1
+            );
+
+            var lastCount = 0;
+            var stableSince = DateTime.UtcNow;
+            var deadline = DateTime.UtcNow.AddMilliseconds(1500);
+            while (DateTime.UtcNow < deadline)
+            {
+                var count = Directory.GetFiles(sessionDir, "*.txt").Length;
+                if (count != lastCount)
+                {
+                    lastCount = count;
+                    stableSince = DateTime.UtcNow;
+                }
+                if (count > 0 && (DateTime.UtcNow - stableSince).TotalMilliseconds >= 200)
+                    break;
+                Thread.Sleep(50);
+            }
+
+            var allFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in Directory.GetFiles(sessionDir, "*.txt"))
+            {
+                try
+                {
+                    foreach (var p in File.ReadAllLines(f))
+                    {
+                        if (File.Exists(p))
+                            allFiles.Add(p);
+                    }
+                }
+                catch { }
+            }
+
+            try
+            {
+                foreach (var f in Directory.GetFiles(sessionDir, "*.*"))
+                    File.Delete(f);
+                Directory.Delete(sessionDir);
+            }
+            catch { }
+
+            if (allFiles.Count == 0)
+            {
+                Shutdown(1);
+                return null;
+            }
+
+            return allFiles.ToList();
+        }
+        catch (System.IO.IOException)
+        {
+            Shutdown(0);
+            return null;
+        }
+    }
+
     private static string? GetArg(string[] args, string key)
     {
         var idx = Array.IndexOf(args, key);
@@ -133,10 +213,33 @@ public partial class App : Application
 
     private static List<string> GetFiles(string[] args)
     {
-        var files = new List<string>();
+        var fileListPath = GetArg(args, "--filelist");
+        if (fileListPath != null)
+        {
+            var files = new List<string>();
+            try
+            {
+                if (File.Exists(fileListPath))
+                {
+                    foreach (var line in File.ReadAllLines(fileListPath))
+                    {
+                        var path = line.Trim();
+                        if (path.Length > 0 && File.Exists(path))
+                            files.Add(path);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to read filelist: {ex.Message}");
+            }
+            return files;
+        }
+
+        var files2 = new List<string>();
         var idx = Array.IndexOf(args, "--files");
         if (idx < 0)
-            return files;
+            return files2;
 
         var start = idx + 1;
         for (var i = start; i < args.Length; i++)
@@ -144,17 +247,17 @@ public partial class App : Application
             if (args[i].StartsWith("--"))
                 break;
             if (File.Exists(args[i]))
-                files.Add(args[i]);
+                files2.Add(args[i]);
         }
 
-        if (files.Count > 0)
-            return files;
+        if (files2.Count > 0)
+            return files2;
 
         var commandLine = Environment.CommandLine;
         var marker = " --files ";
         var markerIdx = commandLine.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (markerIdx < 0)
-            return files;
+            return files2;
 
         var rawFilesPart = commandLine[(markerIdx + marker.Length)..];
         var argsMarkerInRaw = rawFilesPart.IndexOf(" --", StringComparison.Ordinal);
@@ -163,16 +266,16 @@ public partial class App : Application
 
         rawFilesPart = rawFilesPart.Trim();
         if (string.IsNullOrWhiteSpace(rawFilesPart))
-            return files;
+            return files2;
 
         var expanded = ProcessHelper.SplitCommandLinePublic(rawFilesPart);
         foreach (var token in expanded)
         {
             if (File.Exists(token))
-                files.Add(token);
+                files2.Add(token);
         }
 
-        return files;
+        return files2;
     }
 
     private static string DetectHardwareEncoder(string ffmpegPath)
