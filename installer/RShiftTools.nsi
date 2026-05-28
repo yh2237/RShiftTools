@@ -1,3 +1,4 @@
+﻿Unicode true
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
@@ -5,7 +6,6 @@
 !define APP_NAME      "RShiftTools"
 !define APP_EXE       "rshiftt.exe"
 !define APP_VERSION   "1.0.0"
-; NOTE: APP_VERSION must be kept in sync with <Version> in RShiftTools.csproj
 !define UNINSTALL_REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\RShiftTools"
 
 Name "${APP_NAME} ${APP_VERSION}"
@@ -63,13 +63,13 @@ Function CreateScopePage
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 12u "�C���X�g�[���͈͂�I�����Ă�������:"
+  ${NSD_CreateLabel} 0 0 100% 12u "インストール範囲を選択してください:"
   Pop $0
 
-  ${NSD_CreateRadioButton} 0 20 100% 12u "���݂̃��[�U�[�̂�"
+  ${NSD_CreateRadioButton} 0 20 100% 12u "現在のユーザーのみ"
   Pop $RADIO_USER
 
-  ${NSD_CreateRadioButton} 0 40 100% 12u "���ׂẴ��[�U�[ (�Ǘ��Ҍ������K�v)"
+  ${NSD_CreateRadioButton} 0 40 100% 12u "すべてのユーザー (管理者権限が必要)"
   Pop $RADIO_ALL
 
   ${NSD_SetState} $RADIO_USER ${BST_CHECKED}
@@ -101,13 +101,13 @@ Function CreateMaintenancePage
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel} 0 0 100% 24u "RShiftTools �͊��ɃC���X�g�[������Ă��܂��B$\n$\n�C���X�g�[����: $EXISTING_INSTALLDIR$\n$\n�����I�����Ă�������:"
+  ${NSD_CreateLabel} 0 0 100% 24u "RShiftTools は既にインストールされています。$\n$\nインストール先: $EXISTING_INSTALLDIR$\n$\n操作を選択してください:"
   Pop $0
 
-  ${NSD_CreateRadioButton} 0 60 100% 12u "�㏑���C���X�g�[���i�ݒ�͕ێ�����܂��j"
+  ${NSD_CreateRadioButton} 0 60 100% 12u "上書きインストール（設定は保持されます）"
   Pop $RADIO_REINSTALL
 
-  ${NSD_CreateRadioButton} 0 80 100% 12u "�A���C���X�g�[��"
+  ${NSD_CreateRadioButton} 0 80 100% 12u "アンインストール"
   Pop $0
 
   ${NSD_SetState} $RADIO_REINSTALL ${BST_CHECKED}
@@ -118,7 +118,7 @@ FunctionEnd
 Function LeaveMaintenancePage
   ${NSD_GetState} $RADIO_REINSTALL $0
   ${If} $0 != ${BST_CHECKED}
-    MessageBox MB_ICONINFORMATION|MB_OK "�A���C���X�g�[�������s���܂��B"
+    MessageBox MB_ICONINFORMATION|MB_OK "アンインストールを実行します。"
     ExecWait '"$EXISTING_INSTALLDIR\uninstall.exe"'
     Quit
   ${Else}
