@@ -32,5 +32,5 @@ if %errorlevel% neq 0 (
 )
 
 echo ===== フルビルド完了 =====
-echo 出力: installer\RShiftTools-1.0.0-setup.exe
+echo 出力: installer\RShiftTools-1.1.0-setup.exe
 pause

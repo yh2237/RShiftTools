@@ -5,7 +5,7 @@
 
 !define APP_NAME      "RShiftTools"
 !define APP_EXE       "rshiftt.exe"
-!define APP_VERSION   "1.0.0"
+!define APP_VERSION   "1.1.0"
 !define UNINSTALL_REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\RShiftTools"
 
 Name "${APP_NAME} ${APP_VERSION}"

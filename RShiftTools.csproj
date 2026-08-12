@@ -9,6 +9,9 @@
     <AssemblyName>rshiftt</AssemblyName>
     <RootNamespace>RShiftTools</RootNamespace>
     <ApplicationIcon>Assets\RShiftTools.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+  </ItemGroup>
 </Project>
