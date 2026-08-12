@@ -6,15 +6,28 @@ using RShiftTools.ViewModels;
 
 namespace RShiftTools.Views;
 
-public partial class ConvertDialog : Window
+public partial class AudioEditDialog : Window
 {
-    private readonly ConvertViewModel _vm;
+    private readonly AudioEditViewModel _vm;
 
-    public ConvertDialog(List<string> files)
+    public AudioEditDialog(List<string> files)
     {
         InitializeComponent();
-        _vm = new ConvertViewModel(files, new DialogService());
+        _vm = new AudioEditViewModel(files, new DialogService());
         DataContext = _vm;
+    }
+
+    protected override async void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        try
+        {
+            await _vm.InitAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async void RunButton_Click(object sender, RoutedEventArgs e)
@@ -25,12 +38,7 @@ public partial class ConvertDialog : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(
-                ex.Message,
-                AppStrings.AppName,
-                MessageBoxButton.OK,
-                MessageBoxImage.Error
-            );
+            MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -42,10 +50,15 @@ public partial class ConvertDialog : Window
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrEmpty(_vm.LastOutputDir))
+        if (string.IsNullOrEmpty(_vm.LastOutputDir))
+            return;
+        try
         {
-            try { Process.Start("explorer.exe", _vm.LastOutputDir); }
-            catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error); }
+            Process.Start("explorer.exe", _vm.LastOutputDir);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -53,7 +66,7 @@ public partial class ConvertDialog : Window
     {
         if (_vm.IsRunning)
         {
-            var result = System.Windows.MessageBox.Show(
+            var result = MessageBox.Show(
                 "処理中です。キャンセルして閉じますか？",
                 AppStrings.AppName,
                 MessageBoxButton.OKCancel,

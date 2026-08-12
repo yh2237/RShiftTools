@@ -10,7 +10,7 @@ public class ConvertViewModel : BaseViewModel
     public ObservableCollection<MediaFile> Files { get; } = [];
     public ObservableCollection<string> Formats { get; } = [];
     public ObservableCollection<string> EncodeModes { get; } =
-    ["通常", "非圧縮コピー (-c copy)", "ロスレス (-crf 0)"];
+    ["通常", "非圧縮コピー (-c copy)", "最高品質"];
     private string _encodeMode = "通常";
     public string EncodeMode
     {
@@ -148,7 +148,12 @@ public class ConvertViewModel : BaseViewModel
             OnPropertyChanged(nameof(CanRun));
         }
     }
-    public bool CanRun => !_isRunning && Files.Count > 0 && !string.IsNullOrEmpty(SelectedFormat);
+    public bool HasCompatibleInputTypes { get; }
+    public bool CanRun =>
+        !_isRunning
+        && HasCompatibleInputTypes
+        && Files.Count > 0
+        && !string.IsNullOrEmpty(SelectedFormat);
 
     private CancellationTokenSource? _cts;
 
@@ -218,6 +223,16 @@ public class ConvertViewModel : BaseViewModel
         if (filePaths.Count == 0)
             return;
 
+        HasCompatibleInputTypes = filePaths
+            .Select(MediaFormats.GetKind)
+            .Distinct()
+            .Count() == 1;
+        if (!HasCompatibleInputTypes)
+        {
+            StatusText = AppStrings.Error_MixedMediaTypes;
+            return;
+        }
+
         var ext = Path.GetExtension(filePaths[0]).ToLowerInvariant();
         var formats =
             AudioExts.Contains(ext) ? AudioFormats
@@ -270,7 +285,7 @@ public class ConvertViewModel : BaseViewModel
 
             try
             {
-                var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath);
+                var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath, token);
                 var duration = info?.DurationSeconds ?? 0;
 
                 var (ext, argsList) = BuildArgumentsList(
@@ -312,7 +327,12 @@ public class ConvertViewModel : BaseViewModel
                     TotalProgress = (done + p.Percent) / Files.Count * 100;
                 });
 
-                var (success, error) = await App.Ffmpeg.RunAsync(argsList, duration, progress, token);
+                var (success, error) = await App.Ffmpeg.RunWithHardwareFallbackAsync(
+                    argsList,
+                    duration,
+                    progress,
+                    token
+                );
                 file.Status = success ? ProcessStatus.Done : ProcessStatus.Error;
                 if (success)
                     _lastOutputDir = System.IO.Path.GetDirectoryName(outputPath);
@@ -400,17 +420,12 @@ public class ConvertViewModel : BaseViewModel
                 _ => sw,
             };
 
-        (string flag, string value) QualityOpt()
-        {
-            var flag = hwEncoder == "自動 (CPU)" ? "-crf" : "-cq";
-            var value = encodeMode == "ロスレス (-crf 0)" ? "0" : crf.ToString();
-            return (flag, value);
-        }
-
         List<string> Args(string vc, string ac)
         {
-            var (qFlag, qVal) = QualityOpt();
-            var list = new List<string> { "-i", inputPath, "-c:v", vc, qFlag, qVal, "-c:a", ac };
+            var quality = encodeMode == "最高品質" ? 0 : crf;
+            var list = new List<string> { "-i", inputPath, "-c:v", vc };
+            list.AddRange(MediaEncodingProfile.GetVideoQualityArguments(vc, quality));
+            list.AddRange(["-c:a", ac]);
             if (subtitleMode == "削除 (-sn)")
                 list.Add("-sn");
             else
@@ -422,24 +437,24 @@ public class ConvertViewModel : BaseViewModel
         {
             "mp4 (H.264)" => (
                 ".mp4",
-                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
+                Args(VideoCodec("libopenh264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
             ),
             "mp4 (H.265)" => (
                 ".mp4",
-                Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
+                Args(VideoCodec("libkvazaar", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
             ),
             "mkv" => (
                 ".mkv",
-                Args(VideoCodec("libx265", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
+                Args(VideoCodec("libkvazaar", "hevc_nvenc", "hevc_amf", "hevc_qsv"), "aac")
             ),
             "mov" => (
                 ".mov",
-                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
+                Args(VideoCodec("libopenh264", "h264_nvenc", "h264_amf", "h264_qsv"), "aac")
             ),
             "webm" => (".webm", ["-i", inputPath, "-c:v", "libvpx-vp9", "-crf", crf.ToString(), "-c:a", "libopus"]),
             "avi" => (
                 ".avi",
-                Args(VideoCodec("libx264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")
+                Args(VideoCodec("libopenh264", "h264_nvenc", "h264_amf", "h264_qsv"), "mp3")
             ),
             "gif" => (".gif", ["-i", inputPath, "-vf", $"fps={gifFps},scale={gifScale}:-1:flags=lanczos"]),
             "mp3" => (".mp3", ["-i", inputPath, "-c:a", "libmp3lame", "-q:a", "2"]),
@@ -455,7 +470,7 @@ public class ConvertViewModel : BaseViewModel
             "bmp" => (".bmp", ["-y", "-i", inputPath]),
             "avif" => (".avif", ["-y", "-i", inputPath, "-c:v", "libaom-av1"]),
             "tiff" => (".tiff", ["-y", "-i", inputPath]),
-            _ => (".mp4", ["-i", inputPath, "-c:v", "libx264", "-crf", crf.ToString(), "-c:a", "aac"]),
+            _ => (".mp4", ["-i", inputPath, "-c:v", "libopenh264", "-q:v", Math.Clamp(crf, 1, 31).ToString(), "-c:a", "aac"]),
         };
     }
 

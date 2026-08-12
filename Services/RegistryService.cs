@@ -26,6 +26,7 @@ public static class RegistryService
             ("resize", AppStrings.Menu_Resize),
             ("cut", AppStrings.Menu_Cut),
             ("compress", AppStrings.Menu_Compress),
+            ("audio-edit", AppStrings.Menu_AudioEdit),
         };
 
         foreach (var (mode, label) in modes)

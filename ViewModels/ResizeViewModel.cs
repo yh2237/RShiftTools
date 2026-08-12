@@ -266,7 +266,7 @@ public class ResizeViewModel : BaseViewModel
 
             try
             {
-                var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath);
+                var info = await App.Ffprobe.GetMediaInfoAsync(file.FilePath, token);
                 var duration = info?.DurationSeconds ?? 0;
                 var isImage = ImageExts.Contains(
                     Path.GetExtension(file.FilePath).ToLowerInvariant()
@@ -295,26 +295,18 @@ public class ResizeViewModel : BaseViewModel
                     continue;
                 }
 
-                var argsList = isImage
-                    ? new List<string> { "-i", file.FilePath, "-vf", vfFilter, outputPath }
-                    : new List<string>
-                    {
-                        "-i",
-                        file.FilePath,
-                        "-c:v",
-                        _hwEncoder switch
-                        {
-                            "NVIDIA (nvenc)" => "h264_nvenc",
-                            "AMD (amf)" => "h264_amf",
-                            "Intel (qsv)" => "h264_qsv",
-                            _ => "libx264",
-                        },
-                        "-vf",
-                        vfFilter,
-                        "-c:a",
-                        "copy",
-                        outputPath,
-                    };
+                List<string> argsList;
+                if (isImage)
+                {
+                    argsList = ["-i", file.FilePath, "-vf", vfFilter, outputPath];
+                }
+                else
+                {
+                    var videoCodec = MediaEncodingProfile.GetResizeVideoCodec(ext, _hwEncoder);
+                    argsList = ["-i", file.FilePath, "-c:v", videoCodec];
+                    argsList.AddRange(MediaEncodingProfile.GetVideoQualityArguments(videoCodec, 23));
+                    argsList.AddRange(["-vf", vfFilter, "-c:a", "copy", outputPath]);
+                }
 
                 var progress = new Progress<FfmpegProgress>(p =>
                 {
@@ -322,7 +314,7 @@ public class ResizeViewModel : BaseViewModel
                     TotalProgress = (done + p.Percent) / Files.Count * 100;
                 });
 
-                var (success, error) = await App.Ffmpeg.RunAsync(
+                var (success, error) = await App.Ffmpeg.RunWithHardwareFallbackAsync(
                     argsList,
                     duration,
                     progress,

@@ -1,7 +1,17 @@
+using System.IO;
+
 namespace RShiftTools.Services;
 
 public static class MediaFormats
 {
+    public enum MediaKind
+    {
+        Video,
+        Audio,
+        Image,
+        Unknown,
+    }
+
     public static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".avif",
@@ -25,4 +35,13 @@ public static class MediaFormats
             < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024.0:F1} MB",
             _ => $"{bytes / 1024.0 / 1024.0 / 1024.0:F2} GB",
         };
+
+    public static MediaKind GetKind(string path)
+    {
+        var extension = Path.GetExtension(path);
+        if (ImageExtensions.Contains(extension)) return MediaKind.Image;
+        if (AudioExtensions.Contains(extension)) return MediaKind.Audio;
+        if (VideoExtensions.Contains(extension)) return MediaKind.Video;
+        return MediaKind.Unknown;
+    }
 }

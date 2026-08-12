@@ -4,8 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:converters="clr-namespace:RShiftTools.Converters"
     Title="ファイルサイズ縮小 - RShiftTools"
-    Width="560"
-    Height="440"
+    Width="720"
+    Height="620"
     ResizeMode="CanMinimize"
     WindowStartupLocation="CenterScreen">
 
@@ -44,7 +44,7 @@
             Padding="12,8"
             BorderBrush="#DDD"
             BorderThickness="1"
-            Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}">
+            Visibility="{Binding IsSizeMode, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -54,6 +54,13 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
@@ -74,37 +81,143 @@
                 <TextBlock
                     Grid.Row="0"
                     Grid.Column="2"
-                    Margin="0,0,0,6"
+                    Margin="0,0,8,6"
                     VerticalAlignment="Center"
-                    Text="MB" />
+                    Text="単位：" />
+                <ComboBox
+                    Grid.Row="0"
+                    Grid.Column="3"
+                    Grid.ColumnSpan="2"
+                    Margin="0,0,0,6"
+                    ItemsSource="{Binding SizeUnits}"
+                    SelectedItem="{Binding SelectedSizeUnit}" />
 
                 <TextBlock
                     Grid.Row="1"
                     Grid.Column="0"
                     Margin="0,0,8,6"
                     VerticalAlignment="Center"
-                    Text="音声品質：" />
+                    Text="音声品質："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
                 <ComboBox
                     Grid.Row="1"
                     Grid.Column="1"
                     Grid.ColumnSpan="3"
                     Margin="0,0,0,6"
                     ItemsSource="{Binding AudioQualities}"
-                    SelectedItem="{Binding AudioQuality}" />
+                    SelectedItem="{Binding AudioQuality}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
                 <TextBlock
                     Grid.Row="2"
                     Grid.Column="0"
                     Margin="0,0,8,0"
                     VerticalAlignment="Center"
-                    Text="ハードウェア：" />
+                    Text="ハードウェア："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
                 <ComboBox
                     Grid.Row="2"
                     Grid.Column="1"
                     Grid.ColumnSpan="3"
                     ItemsSource="{Binding HwEncoders}"
-                    SelectedItem="{Binding HwEncoder}" />
+                    SelectedItem="{Binding HwEncoder}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
                 <TextBlock
                     Grid.Row="3"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="サイズ精度：" />
+                <ComboBox
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="4"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding AccuracyModes}"
+                    SelectedItem="{Binding AccuracyMode}" />
+                <CheckBox
+                    Grid.Row="4"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="4"
+                    Margin="0,6,0,0"
+                    Content="入力がすでに目標以下ならスキップ"
+                    IsChecked="{Binding SkipFilesAlreadyWithinTarget}" />
+                <TextBlock
+                    Grid.Row="5"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="解像度："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <ComboBox
+                    Grid.Row="5"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="4"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding ResolutionModes}"
+                    SelectedItem="{Binding ResolutionMode}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <TextBlock
+                    Grid.Row="6"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="映像コーデック："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <ComboBox
+                    Grid.Row="6"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="4"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding VideoCodecs}"
+                    SelectedItem="{Binding VideoCodec}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <TextBlock
+                    Grid.Row="7"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="FPS上限："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <ComboBox
+                    Grid.Row="7"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="4"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding FrameRateCaps}"
+                    SelectedItem="{Binding FrameRateCap}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <TextBlock
+                    Grid.Row="8"
+                    Grid.Column="0"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="字幕："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <ComboBox
+                    Grid.Row="8"
+                    Grid.Column="1"
+                    Grid.ColumnSpan="1"
+                    Margin="0,6,8,0"
+                    ItemsSource="{Binding SubtitleModes}"
+                    SelectedItem="{Binding SubtitleMode}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <TextBlock
+                    Grid.Row="8"
+                    Grid.Column="2"
+                    Margin="0,6,8,0"
+                    VerticalAlignment="Center"
+                    Text="メタデータ："
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <ComboBox
+                    Grid.Row="8"
+                    Grid.Column="3"
+                    Grid.ColumnSpan="2"
+                    Margin="0,6,0,0"
+                    ItemsSource="{Binding MetadataModes}"
+                    SelectedItem="{Binding MetadataMode}"
+                    Visibility="{Binding IsVideoMode, Converter={StaticResource BoolToVis}}" />
+                <TextBlock
+                    Grid.Row="9"
                     Grid.Column="0"
                     Grid.ColumnSpan="5"
                     Margin="0,6,0,0"
@@ -131,6 +244,18 @@
                     Minimum="{Binding ImageQualityMin}"
                     TickFrequency="1"
                     Value="{Binding ImageQuality}" />
+                <CheckBox
+                    Margin="0,10,0,4"
+                    Content="目標ファイルサイズを指定"
+                    IsChecked="{Binding ImageTargetEnabled}" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Text="目標：" />
+                    <TextBox
+                        Width="90"
+                        Margin="6,0,6,0"
+                        Text="{Binding ImageTargetSizeKb, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock VerticalAlignment="Center" Text="KB以下" />
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -147,7 +272,11 @@
                     <GridViewColumn
                         Width="80"
                         DisplayMemberBinding="{Binding FileSizeText}"
-                        Header="サイズ" />
+                        Header="入力" />
+                    <GridViewColumn
+                        Width="180"
+                        DisplayMemberBinding="{Binding Details}"
+                        Header="出力結果" />
                     <GridViewColumn Width="80" Header="進捗">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>

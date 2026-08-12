@@ -14,6 +14,8 @@ public partial class CutDialog : Window
     private readonly CutViewModel _vm;
     private readonly DispatcherTimer _timer;
     private bool _isDraggingSlider;
+    private bool _mediaReady;
+    private bool _playWhenReady;
     private DateTime _lastSeekTime;
     private readonly TimeSpan _seekThrottle = TimeSpan.FromMilliseconds(50);
 
@@ -28,10 +30,19 @@ public partial class CutDialog : Window
 
         _vm.PlayRequested += () =>
         {
+            if (!_mediaReady)
+            {
+                _playWhenReady = true;
+                return;
+            }
             MediaPlayer.Position = TimeSpan.FromSeconds(_vm.CurrentSeconds);
             MediaPlayer.Play();
         };
-        _vm.PauseRequested += () => MediaPlayer.Pause();
+        _vm.PauseRequested += () =>
+        {
+            _playWhenReady = false;
+            MediaPlayer.Pause();
+        };
         _vm.SeekRequested += seconds =>
         {
             MediaPlayer.Position = TimeSpan.FromSeconds(seconds);
@@ -52,22 +63,22 @@ public partial class CutDialog : Window
         MouseLeftButtonUp += OnWindowMouseUp;
         Focusable = true;
 
-        Loaded += async (_, _) =>
+        Loaded += (_, _) =>
         {
-            await _vm.InitAsync();
-            UpdateMarkers();
-
-            if (_vm.IsPreviewAvailable)
-            {
-                MediaPlayer.Source = new Uri(_vm.File.FilePath);
-                MediaPlayer.Play();
-                await Task.Delay(200);
-                MediaPlayer.Pause();
-                MediaPlayer.Position = TimeSpan.Zero;
-                _vm.CurrentSeconds = 0;
-                UpdateMarkers();
-            }
+            _ = InitializePreviewAsync();
         };
+    }
+
+    private async Task InitializePreviewAsync()
+    {
+        await _vm.InitAsync();
+        UpdateMarkers();
+
+        if (_vm.IsPreviewAvailable)
+        {
+            _mediaReady = false;
+            MediaPlayer.Source = new Uri(_vm.File.FilePath);
+        }
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)
@@ -136,15 +147,27 @@ public partial class CutDialog : Window
 
     private void MediaPlayer_MediaOpened(object sender, RoutedEventArgs e)
     {
+        _mediaReady = true;
         if (MediaPlayer.NaturalDuration.HasTimeSpan)
         {
             _vm.TotalSeconds = MediaPlayer.NaturalDuration.TimeSpan.TotalSeconds;
             _vm.OutPoint = _vm.TotalSeconds;
         }
+        MediaPlayer.Position = TimeSpan.FromSeconds(_vm.CurrentSeconds);
+        if (_playWhenReady)
+        {
+            _playWhenReady = false;
+            MediaPlayer.Play();
+            _timer.Start();
+        }
     }
 
     private void MediaPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
     {
+        _mediaReady = false;
+        _playWhenReady = false;
+        _vm.IsPlaying = false;
+        _timer.Stop();
         PreviewUnavailableMsg.Text = $"プレビュー読み込み失敗\n{e.ErrorException?.Message}";
         PreviewUnavailableMsg.Visibility = Visibility.Visible;
     }

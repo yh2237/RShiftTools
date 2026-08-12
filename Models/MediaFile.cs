@@ -72,6 +72,19 @@ public class MediaFile : INotifyPropertyChanged
         }
     }
 
+    private string _details = "情報を取得中...";
+    public string Details
+    {
+        get => _details;
+        set
+        {
+            if (_details == value)
+                return;
+            _details = value;
+            OnPropertyChanged();
+        }
+    }
+
     private static string FormatSize(long bytes) => MediaFormats.FormatSize(bytes);
 }
 

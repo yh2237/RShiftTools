@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Threading;
+using System.Text.Json;
 using System.Windows;
 using RShiftTools.Services;
 
@@ -93,7 +93,10 @@ public partial class App : Application
             return;
         }
 
-        if (!UserSettings.Initialized)
+        if (
+            !UserSettings.Initialized
+            || !IsConfiguredHardwareEncoderAvailable(FfmpegPath, UserSettings.HwEncoder)
+        )
         {
             UserSettings.HwEncoder = DetectHardwareEncoder(FfmpegPath);
             UserSettings.Initialized = true;
@@ -111,17 +114,44 @@ public partial class App : Application
             return;
         }
 
-        Window window = mode switch
+        if (mode == "cut" && files.Count != 1)
         {
-            "convert" => new Views.ConvertDialog(files),
-            "resize" => new Views.ResizeDialog(files),
-            "cut" => new Views.CutDialog(files),
-            "compress" => new Views.CompressDialog(files),
-            _ => new Views.MainWindow(),
-        };
+            MessageBox.Show(
+                AppStrings.Error_CutSingleFile,
+                AppStrings.AppName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+            Shutdown(1);
+            return;
+        }
+
+        if (
+            mode == "audio-edit"
+            && files.Any(path => MediaFormats.GetKind(path) != MediaFormats.MediaKind.Audio)
+        )
+        {
+            MessageBox.Show(
+                AppStrings.Error_AudioFilesOnly,
+                AppStrings.AppName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+            Shutdown(1);
+            return;
+        }
 
         try
         {
+            Window window = mode switch
+            {
+                "convert" => new Views.ConvertDialog(files),
+                "resize" => new Views.ResizeDialog(files),
+                "cut" => new Views.CutDialog(files),
+                "compress" => new Views.CompressDialog(files),
+                "audio-edit" => new Views.AudioEditDialog(files),
+                _ => new Views.MainWindow(),
+            };
             window.Show();
         }
         catch (Exception ex)
@@ -136,53 +166,108 @@ public partial class App : Application
 
     private List<string>? CollectFromSiblingInstances(string mode, List<string> files)
     {
-        var pipeName = $"RShiftTools_{mode}";
-        var sessionId = Environment.ProcessId;
-        var sessionKey = (DateTime.UtcNow.Ticks / TimeSpan.TicksPerSecond).ToString();
-        var sessionDir = Path.Combine(Path.GetTempPath(), "RShiftTools", pipeName + "_" + sessionKey);
-
-        Directory.CreateDirectory(sessionDir);
-        var myFile = Path.Combine(sessionDir, $"{sessionId}.txt");
-        File.WriteAllLines(myFile, files.Where(File.Exists));
-
+        var windowsSessionId = Process.GetCurrentProcess().SessionId;
+        var pipeName = $"RShiftTools_{windowsSessionId}_{mode}";
+        System.IO.Pipes.NamedPipeServerStream server;
         try
         {
-            using var pipe = new System.IO.Pipes.NamedPipeServerStream(
+            server = new System.IO.Pipes.NamedPipeServerStream(
                 pipeName,
                 System.IO.Pipes.PipeDirection.In,
-                1
+                1,
+                System.IO.Pipes.PipeTransmissionMode.Byte,
+                System.IO.Pipes.PipeOptions.Asynchronous
             );
-
-            Thread.Sleep(500);
-
-            var allFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var f in Directory.GetFiles(sessionDir, "*.txt"))
+        }
+        catch (System.IO.IOException)
+        {
+            if (SendFilesToCollector(pipeName, files))
             {
-                try
-                {
-                    foreach (var p in File.ReadAllLines(f))
-                    {
-                        if (File.Exists(p))
-                            allFiles.Add(p);
-                    }
-                }
-                catch { }
+                Shutdown(0);
+                return null;
             }
 
-            try { Directory.Delete(sessionDir, true); } catch { }
+            return files.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
 
-            if (allFiles.Count == 0)
+        using (server)
+        {
+            var allFiles = new HashSet<string>(
+                files.Where(File.Exists),
+                StringComparer.OrdinalIgnoreCase
+            );
+            var deadline = DateTime.UtcNow.AddSeconds(4);
+
+            while (DateTime.UtcNow < deadline)
             {
-                Shutdown(1);
-                return null;
+                using var idleTimeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(700));
+                try
+                {
+                    server.WaitForConnectionAsync(idleTimeout.Token).GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                try
+                {
+                    using var reader = new StreamReader(
+                        server,
+                        Encoding.UTF8,
+                        detectEncodingFromByteOrderMarks: false,
+                        leaveOpen: true
+                    );
+                    var payload = reader.ReadLineAsync()
+                        .WaitAsync(TimeSpan.FromSeconds(2))
+                        .GetAwaiter()
+                        .GetResult();
+                    var received = payload == null
+                        ? null
+                        : JsonSerializer.Deserialize<List<string>>(payload);
+                    if (received != null)
+                    {
+                        foreach (var path in received.Where(File.Exists))
+                            allFiles.Add(path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Failed to receive selected files: {ex.Message}");
+                }
+                finally
+                {
+                    if (server.IsConnected)
+                        server.Disconnect();
+                }
             }
 
             return allFiles.ToList();
         }
-        catch (System.IO.IOException)
+    }
+
+    private static bool SendFilesToCollector(string pipeName, IEnumerable<string> files)
+    {
+        try
         {
-            Shutdown(0);
-            return null;
+            using var client = new System.IO.Pipes.NamedPipeClientStream(
+                ".",
+                pipeName,
+                System.IO.Pipes.PipeDirection.Out
+            );
+            client.Connect(1500);
+            using var writer = new StreamWriter(
+                client,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                leaveOpen: true
+            ) { AutoFlush = true };
+            writer.WriteLine(JsonSerializer.Serialize(files.Where(File.Exists)));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to send selected files to collector: {ex.Message}");
+            return false;
         }
     }
 
@@ -261,28 +346,54 @@ public partial class App : Application
 
     private static string DetectHardwareEncoder(string ffmpegPath)
     {
+        if (CanInitializeEncoder(ffmpegPath, "h264_nvenc")) return "NVIDIA (nvenc)";
+        if (CanInitializeEncoder(ffmpegPath, "h264_amf")) return "AMD (amf)";
+        if (CanInitializeEncoder(ffmpegPath, "h264_qsv")) return "Intel (qsv)";
+        return "自動 (CPU)";
+    }
+
+    private static bool IsConfiguredHardwareEncoderAvailable(string ffmpegPath, string setting) =>
+        setting switch
+        {
+            "NVIDIA (nvenc)" => CanInitializeEncoder(ffmpegPath, "h264_nvenc"),
+            "AMD (amf)" => CanInitializeEncoder(ffmpegPath, "h264_amf"),
+            "Intel (qsv)" => CanInitializeEncoder(ffmpegPath, "h264_qsv"),
+            _ => true,
+        };
+
+    private static bool CanInitializeEncoder(string ffmpegPath, string encoder)
+    {
         try
         {
             using var process = ProcessHelper.StartProcess(
                 ffmpegPath,
-                new[] { "-hide_banner", "-encoders" },
-                redirectStdOut: true,
-                redirectStdErr: false
+                new[]
+                {
+                    "-hide_banner", "-loglevel", "error",
+                    "-f", "lavfi", "-i", "color=size=64x64:rate=1",
+                    "-frames:v", "1", "-an", "-c:v", encoder,
+                    "-f", "null", "-",
+                },
+                redirectStdOut: false,
+                redirectStdErr: true
             );
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (output.Contains("h264_nvenc"))
-                return "NVIDIA (nvenc)";
-            if (output.Contains("h264_amf"))
-                return "AMD (amf)";
-            if (output.Contains("h264_qsv"))
-                return "Intel (qsv)";
+            var errorTask = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit();
+                Log.Error($"Hardware encoder probe timed out: {encoder}");
+                return false;
+            }
+            var error = errorTask.GetAwaiter().GetResult();
+            if (process.ExitCode == 0)
+                return true;
+            Log.Debug($"Hardware encoder unavailable: {encoder}: {error}");
         }
         catch (Exception ex)
         {
-            Log.Error($"HW encoder detection failed: {ex.Message}");
+            Log.Error($"Hardware encoder detection failed ({encoder}): {ex.Message}");
         }
-        return "自動 (CPU)";
+        return false;
     }
 }

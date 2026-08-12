@@ -46,12 +46,28 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (mode == "cut" && files.Count != 1)
+        {
+            MessageBox.Show(AppStrings.Error_CutSingleFile, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (
+            mode == "audio-edit"
+            && files.Any(path => MediaFormats.GetKind(path) != MediaFormats.MediaKind.Audio)
+        )
+        {
+            MessageBox.Show(AppStrings.Error_AudioFilesOnly, AppStrings.AppName, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         Window dialog = mode switch
         {
             "convert" => new ConvertDialog(files),
             "resize" => new ResizeDialog(files),
             "cut" => new CutDialog(files),
             "compress" => new CompressDialog(files),
+            "audio-edit" => new AudioEditDialog(files),
             _ => throw new InvalidOperationException($"Unknown mode: {mode}"),
         };
 
@@ -63,11 +79,13 @@ public partial class MainWindow : Window
     private void ToolResize_Click(object sender, RoutedEventArgs e) => OpenMode("resize", _vm.GetSelectedPaths());
     private void ToolCut_Click(object sender, RoutedEventArgs e) => OpenMode("cut", _vm.GetSelectedPaths());
     private void ToolCompress_Click(object sender, RoutedEventArgs e) => OpenMode("compress", _vm.GetSelectedPaths());
+    private void ToolAudioEdit_Click(object sender, RoutedEventArgs e) => OpenMode("audio-edit", _vm.GetSelectedPaths());
 
     private void CtxConvert_Click(object sender, RoutedEventArgs e) => OpenMode("convert", _vm.GetSelectedPaths());
     private void CtxResize_Click(object sender, RoutedEventArgs e) => OpenMode("resize", _vm.GetSelectedPaths());
     private void CtxCut_Click(object sender, RoutedEventArgs e) => OpenMode("cut", _vm.GetSelectedPaths());
     private void CtxCompress_Click(object sender, RoutedEventArgs e) => OpenMode("compress", _vm.GetSelectedPaths());
+    private void CtxAudioEdit_Click(object sender, RoutedEventArgs e) => OpenMode("audio-edit", _vm.GetSelectedPaths());
 
     private void Window_DragEnter(object sender, DragEventArgs e)
     {
@@ -155,7 +173,7 @@ public partial class MainWindow : Window
     private void MenuAbout_Click(object sender, RoutedEventArgs e)
     {
         var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        var version = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.0.0";
+        var version = ver != null ? $"{ver.Major}.{ver.Minor}.{ver.Build}" : "1.1.0";
         MessageBox.Show(
             $"RShiftTools v{version}\n\nGitHub: https://github.com/yh2237/RShiftTools",
             "バージョン情報",

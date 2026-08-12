@@ -370,33 +370,30 @@ public class CutViewModel : BaseViewModel
 
             if (AnimatedImageExts.Contains(ext))
             {
-                argsList = ["-y", "-i", File.FilePath, "-ss", inStr, "-t", cutDurationStr];
+                argsList = [
+                    "-y", "-i", File.FilePath, "-ss", inStr, "-t", cutDurationStr,
+                    "-an", "-vsync", "0"
+                ];
                 if (ext == ".gif")
-                {
-                    argsList.Add(outputPath);
-                }
+                    argsList.AddRange(["-c:v", "gif", "-loop", "0"]);
                 else if (ext == ".webp")
-                {
-                    argsList.AddRange(["-vcodec", "libwebp", "-loop", "0", "-lossless", "0"]);
-                    argsList.Add(outputPath);
-                }
+                    argsList.AddRange(["-c:v", "libwebp", "-loop", "0", "-lossless", "0"]);
                 else
-                {
-                    argsList.Add(outputPath);
-                }
+                    argsList.AddRange(["-c:v", "apng", "-plays", "0"]);
+                argsList.Add(outputPath);
+            }
+            else if (MediaFormats.AudioExtensions.Contains(ext))
+            {
+                argsList = [
+                    "-ss", inStr, "-i", File.FilePath, "-t", cutDurationStr,
+                    "-vn", "-sn", "-map_metadata", "0", "-avoid_negative_ts", "make_zero"
+                ];
+                argsList.AddRange(MediaEncodingProfile.GetCutAudioArguments(ext));
+                argsList.Add(outputPath);
             }
             else
             {
-                string videoCodec = _hwEncoder switch
-                {
-                    "NVIDIA (nvenc)" => "h264_nvenc",
-                    "AMD (amf)" => "h264_amf",
-                    "Intel (qsv)" => "h264_qsv",
-                    _ => "libx264",
-                };
-                var (hwQualityFlag, hwQualityVal) = _hwEncoder == "自動 (CPU)"
-                    ? ("-crf", _crf.ToString())
-                    : ("-cq", _crf.ToString());
+                var videoCodec = MediaEncodingProfile.GetCutVideoCodec(ext, _hwEncoder);
 
                 argsList =
                 [
@@ -409,10 +406,10 @@ public class CutViewModel : BaseViewModel
                     cutDurationStr,
                     "-c:v",
                     videoCodec,
-                    hwQualityFlag,
-                    hwQualityVal,
                 ];
-                argsList.AddRange(["-c:a", "aac", outputPath]);
+                argsList.AddRange(MediaEncodingProfile.GetVideoQualityArguments(videoCodec, _crf));
+                argsList.AddRange(MediaEncodingProfile.GetCutAudioArguments(ext));
+                argsList.Add(outputPath);
             }
 
             var progress = new Progress<FfmpegProgress>(p =>
@@ -420,7 +417,12 @@ public class CutViewModel : BaseViewModel
                 Progress = p.Percent * 100;
             });
 
-            var (success, error) = await App.Ffmpeg.RunAsync(argsList, cutDuration, progress, token);
+            var (success, error) = await App.Ffmpeg.RunWithHardwareFallbackAsync(
+                argsList,
+                cutDuration,
+                progress,
+                token
+            );
 
             StatusText = success
                 ? AppStrings.Status_Success

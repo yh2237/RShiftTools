@@ -52,6 +52,10 @@ public partial class ResizeDialog : Window
                 MessageBoxImage.Error
             );
         }
+        finally
+        {
+            _vm.IsRunning = false;
+        }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _vm.Cancel();

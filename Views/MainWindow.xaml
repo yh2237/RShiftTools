@@ -93,6 +93,8 @@
                         <MenuItem Click="CtxResize_Click" Header="リサイズ(_R)..." />
                         <MenuItem Click="CtxCut_Click" Header="カット(_T)..." />
                         <MenuItem Click="CtxCompress_Click" Header="ファイルサイズ縮小(_S)..." />
+                        <Separator />
+                        <MenuItem Click="CtxAudioEdit_Click" Header="音声を編集(_A)..." />
                     </ContextMenu>
                 </ListView.ContextMenu>
                 <ListView.View>
@@ -170,9 +172,15 @@
                             ToolTip="動画の特定範囲を切り出す">カット</Button>
                         <Button
                             Width="120"
+                            Margin="0,0,6,0"
                             Click="ToolCompress_Click"
                             IsEnabled="{Binding HasSelection}"
                             ToolTip="ファイルサイズを縮小">ファイルサイズ縮小</Button>
+                        <Button
+                            Width="100"
+                            Click="ToolAudioEdit_Click"
+                            IsEnabled="{Binding HasSelection}"
+                            ToolTip="ビット深度・サンプルレート・チャンネル数を変更">音声を編集</Button>
                     </StackPanel>
                     <TextBlock
                         Grid.Column="1"

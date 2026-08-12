@@ -17,6 +17,11 @@ public class MediaInfo
     public string AudioCodec { get; init; } = "";
     public double VideoFrameRate { get; init; }
     public int AudioSampleRate { get; init; }
+    public int AudioBitDepth { get; init; }
+    public int AudioChannels { get; init; }
+    public string AudioSampleFormat { get; init; } = "";
+    public string AudioChannelLayout { get; init; } = "";
+    public int SubtitleStreamCount { get; init; }
     public int AudioBitrateKbps { get; init; }
     public int TotalBitrateKbps { get; init; }
     public MediaType Type { get; init; }
@@ -41,7 +46,10 @@ public class FfprobeService
         _ffprobePath = ffprobePath;
     }
 
-    public async Task<MediaInfo?> GetMediaInfoAsync(string filePath)
+    public async Task<MediaInfo?> GetMediaInfoAsync(
+        string filePath,
+        CancellationToken cancellationToken = default
+    )
     {
         var argList = new List<string>
         {
@@ -60,9 +68,41 @@ public class FfprobeService
             redirectStdOut: true,
             redirectStdErr: true
         );
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var cancellationRegistration = timeout.Token.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to stop ffprobe: {ex.Message}");
+            }
+        });
         var jsonTask = process.StandardOutput.ReadToEndAsync();
         var errTask = process.StandardError.ReadToEndAsync();
-        await Task.WhenAll(jsonTask, errTask, process.WaitForExitAsync());
+        try
+        {
+            await Task.WhenAll(jsonTask, errTask, process.WaitForExitAsync(timeout.Token));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.WhenAll(
+                    jsonTask,
+                    errTask,
+                    process.WaitForExitAsync(CancellationToken.None)
+                );
+            }
+            catch { }
+            Log.Error($"ffprobe timed out: {filePath}");
+            return null;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
         var json = jsonTask.Result;
         var err = errTask.Result;
 
@@ -124,13 +164,24 @@ public class FfprobeService
             audioCodec = "";
         int width = 0,
             height = 0,
-            audioSampleRate = 0;
+            audioSampleRate = 0,
+            audioBitDepth = 0,
+            audioChannels = 0;
         var audioBitrateKbps = 0;
+        var subtitleStreamCount = 0;
+        string audioSampleFormat = "",
+            audioChannelLayout = "";
         double frameRate = 0;
 
         foreach (var stream in streams.EnumerateArray())
         {
             var codecType = stream.TryGetProperty("codec_type", out var ct) ? ct.GetString() : null;
+
+            if (codecType == "subtitle")
+            {
+                subtitleStreamCount++;
+                continue;
+            }
 
             if (codecType == "video" && videoCodec == "")
             {
@@ -187,6 +238,27 @@ public class FfprobeService
                         out audioSampleRate
                     );
 
+                audioSampleFormat = stream.TryGetProperty("sample_fmt", out var sf)
+                    ? sf.GetString() ?? string.Empty
+                    : string.Empty;
+                audioChannels =
+                    stream.TryGetProperty("channels", out var channels)
+                    && channels.TryGetInt32(out var channelCount)
+                        ? channelCount
+                        : 0;
+                audioChannelLayout = stream.TryGetProperty("channel_layout", out var layout)
+                    ? layout.GetString() ?? string.Empty
+                    : string.Empty;
+
+                var bitsPerSample = ReadJsonInt(stream, "bits_per_sample");
+                var bitsPerRawSample = ReadJsonInt(stream, "bits_per_raw_sample");
+                audioBitDepth = InferAudioBitDepth(
+                    audioSampleFormat,
+                    bitsPerSample,
+                    bitsPerRawSample,
+                    audioCodec
+                );
+
                 if (
                     stream.TryGetProperty("bit_rate", out var abr)
                     && abr.ValueKind == JsonValueKind.String
@@ -216,10 +288,50 @@ public class FfprobeService
             AudioCodec = audioCodec,
             VideoFrameRate = frameRate,
             AudioSampleRate = audioSampleRate,
+            AudioBitDepth = audioBitDepth,
+            AudioChannels = audioChannels,
+            AudioSampleFormat = audioSampleFormat,
+            AudioChannelLayout = audioChannelLayout,
+            SubtitleStreamCount = subtitleStreamCount,
             AudioBitrateKbps = audioBitrateKbps,
             TotalBitrateKbps = totalBitrateKbps,
             Type = type,
         };
+    }
+
+    private static int ReadJsonInt(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+            return 0;
+        if (value.TryGetInt32(out var number))
+            return number;
+        return value.ValueKind == JsonValueKind.String
+            && int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)
+                ? number
+                : 0;
+    }
+
+    internal static int InferAudioBitDepth(
+        string sampleFormat,
+        int bitsPerSample,
+        int bitsPerRawSample,
+        string codec
+    )
+    {
+        if (bitsPerRawSample > 0) return bitsPerRawSample;
+        if (bitsPerSample > 0) return bitsPerSample;
+        if (codec.Contains("s24", StringComparison.OrdinalIgnoreCase)) return 24;
+        var hasMeaningfulPcmDepth = codec.StartsWith("pcm_", StringComparison.OrdinalIgnoreCase)
+            || codec.Equals("flac", StringComparison.OrdinalIgnoreCase)
+            || codec.Equals("alac", StringComparison.OrdinalIgnoreCase);
+        if (!hasMeaningfulPcmDepth) return 0;
+        if (sampleFormat.StartsWith("u8", StringComparison.OrdinalIgnoreCase)) return 8;
+        if (sampleFormat.StartsWith("s16", StringComparison.OrdinalIgnoreCase)) return 16;
+        if (sampleFormat.StartsWith("s32", StringComparison.OrdinalIgnoreCase)) return 32;
+        if (sampleFormat.StartsWith("s64", StringComparison.OrdinalIgnoreCase)) return 64;
+        if (sampleFormat.StartsWith("flt", StringComparison.OrdinalIgnoreCase)) return 32;
+        if (sampleFormat.StartsWith("dbl", StringComparison.OrdinalIgnoreCase)) return 64;
+        return 0;
     }
 
     private static MediaType DetermineMediaType(

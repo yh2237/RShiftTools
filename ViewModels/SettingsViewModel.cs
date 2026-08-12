@@ -40,7 +40,7 @@ public class SettingsViewModel : BaseViewModel
         get
         {
             var ver = Assembly.GetExecutingAssembly().GetName().Version;
-            return ver is null ? "1.0.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
+            return ver is null ? "1.1.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
         }
     }
 

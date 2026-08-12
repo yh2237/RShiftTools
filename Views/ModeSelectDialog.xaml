@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="モードを選択"
     Width="340"
-    Height="260"
+    Height="290"
     ResizeMode="NoResize"
     WindowStartupLocation="CenterOwner">
 
@@ -45,6 +45,11 @@
                 Margin="0,4"
                 Content="ファイルサイズ縮小  —  容量を小さくする"
                 Tag="compress" />
+            <RadioButton
+                x:Name="RadioAudioEdit"
+                Margin="0,4"
+                Content="音声を編集  —  ビット深度などを変更"
+                Tag="audio-edit" />
         </StackPanel>
 
         <StackPanel

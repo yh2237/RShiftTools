@@ -14,4 +14,10 @@ public interface IFfmpegService
         IProgress<RShiftTools.Models.FfmpegProgress>? onProgress = null,
         CancellationToken cancellationToken = default
     );
+    Task<(bool Success, string ErrorLog)> RunWithHardwareFallbackAsync(
+        IEnumerable<string> arguments,
+        double totalDurationSeconds,
+        IProgress<RShiftTools.Models.FfmpegProgress>? onProgress = null,
+        CancellationToken cancellationToken = default
+    );
 }

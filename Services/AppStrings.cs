@@ -18,9 +18,13 @@ public static class AppStrings
     public const string Status_CompleteFormat = "完了: {0} 件成功  /  {1} 件失敗";
     public const string Error_FfmpegMissing = "ffmpeg.exe / ffprobe.exe が見つかりません。\nexe と同じフォルダに配置してください。";
     public const string Error_FileNotSpecified = "ファイルが指定されていません。";
+    public const string Error_MixedMediaTypes = "異なる種類のメディアは同時に処理できません。画像・音声・動画のいずれかに分けて選択してください。";
+    public const string Error_CutSingleFile = "カットは1ファイルずつ実行してください。";
+    public const string Error_AudioFilesOnly = "音声編集には音声ファイルだけを選択してください。";
     public const string Error_WindowStartupFailed = "ウィンドウの起動に失敗しました。\n{0}\n\n{1}";
     public const string Menu_Convert = "変換...";
     public const string Menu_Resize = "リサイズ...";
     public const string Menu_Cut = "カット...";
     public const string Menu_Compress = "ファイルサイズ縮小...";
+    public const string Menu_AudioEdit = "音声を編集...";
 }
