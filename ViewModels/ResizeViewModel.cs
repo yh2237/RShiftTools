@@ -182,6 +182,7 @@ public class ResizeViewModel : BaseViewModel
             _height = info.Height;
             OnPropertyChanged(nameof(Width));
             OnPropertyChanged(nameof(Height));
+            ApplyPreset(_selectedPreset);
         }
     }
 

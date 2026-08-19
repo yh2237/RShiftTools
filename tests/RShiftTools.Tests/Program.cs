@@ -1,4 +1,5 @@
 using RShiftTools.Services;
+using RShiftTools.ViewModels;
 
 var tests = new (string Name, Action Run)[]
 {
@@ -9,9 +10,13 @@ var tests = new (string Name, Action Run)[]
     ("Hardware fallback argument conversion", TestHardwareFallback),
     ("Audio bit depth inference", TestAudioBitDepthInference),
     ("Audio edit arguments", TestAudioEditArguments),
+    ("Convert copy remux rules", TestCopyRemuxRules),
+    ("Compress container-safe codecs", TestContainerSafeCodecs),
     ("Audio cut profiles", TestAudioCutProfiles),
     ("Target size planning", TestTargetSizePlanning),
     ("Compression profile options", TestCompressionProfileOptions),
+    ("Probe JSON with string bit depth", TestProbeStringBitDepth),
+    ("E2E audio edit real ffmpeg", TestE2EAudioEdit),
 };
 
 var failed = 0;
@@ -225,6 +230,127 @@ static void TestCompressionProfileOptions()
         "scale=1280:720:flags=lanczos",
         MediaEncodingProfile.BuildCompressionFilter(3840, 2160, "自動（目標サイズ優先）", 0, 2000)
     );
+}
+
+static void TestCopyRemuxRules()
+{
+    var h264mp4 = new MediaInfo { VideoCodec = "h264", AudioCodec = "aac" };
+    var h264flac = new MediaInfo { VideoCodec = "h264", AudioCodec = "flac" };
+    var vp9 = new MediaInfo { VideoCodec = "vp9", AudioCodec = "opus" };
+    var pcm = new MediaInfo { AudioCodec = "pcm_s24le" };
+    var opus = new MediaInfo { AudioCodec = "opus" };
+
+    Equal(true, ConvertViewModel.CanCopyRemux(h264mp4, "mkv"));
+    Equal(true, ConvertViewModel.CanCopyRemux(h264mp4, "mov"));
+    Equal(true, ConvertViewModel.CanCopyRemux(h264mp4, "mp4 (H.264)"));
+    Equal(false, ConvertViewModel.CanCopyRemux(h264flac, "mp4 (H.264)"));
+    Equal(false, ConvertViewModel.CanCopyRemux(vp9, "mp4 (H.264)"));
+    Equal(false, ConvertViewModel.CanCopyRemux(vp9, "webm"));
+    Equal(true, ConvertViewModel.CanCopyRemux(pcm, "wav"));
+    Equal(false, ConvertViewModel.CanCopyRemux(opus, "wav"));
+    Equal(false, ConvertViewModel.CanCopyRemux(null, "mkv"));
+}
+
+static void TestContainerSafeCodecs()
+{
+    Equal(
+        "wmv2",
+        MediaEncodingProfile.GetCompressionVideoCodec(".wmv", MediaEncodingProfile.H265Codec, "NVIDIA (nvenc)")
+    );
+    Equal(
+        "wmv2",
+        MediaEncodingProfile.GetCompressionVideoCodec(".wmv", MediaEncodingProfile.H264Codec, "NVIDIA (nvenc)")
+    );
+    Equal(
+        "flv",
+        MediaEncodingProfile.GetCompressionVideoCodec(".flv", MediaEncodingProfile.H265Codec, "NVIDIA (nvenc)")
+    );
+    Equal(
+        "hevc_nvenc",
+        MediaEncodingProfile.GetCompressionVideoCodec(".mp4", MediaEncodingProfile.H265Codec, "NVIDIA (nvenc)")
+    );
+}
+
+static void TestProbeStringBitDepth()
+{
+    const string json = """
+        {
+          "format": {
+            "filename": "Vocal_only - FX.wav",
+            "duration": "76.680833",
+            "size": "22084262",
+            "bit_rate": "2304018"
+          },
+          "streams": [
+            {
+              "index": 0,
+              "codec_name": "pcm_s24le",
+              "codec_type": "audio",
+              "sample_fmt": "s32",
+              "sample_rate": "48000",
+              "channels": 2,
+              "bits_per_sample": 24,
+              "bits_per_raw_sample": "24"
+            }
+          ]
+        }
+        """;
+    var info = FfprobeService.ParseMediaInfo("Vocal_only - FX.wav", json);
+    NotNull(info);
+    Equal(24, info!.AudioBitDepth);
+    Equal(48000, info.AudioSampleRate);
+    Equal(2, info.AudioChannels);
+    Equal("pcm_s24le", info.AudioCodec);
+}
+
+static void TestE2EAudioEdit()
+{
+    var root = AppContext.BaseDirectory;
+    var ffmpeg = Path.Combine(root, "ffmpeg.exe");
+    var ffprobe = Path.Combine(root, "ffprobe.exe");
+    if (!File.Exists(ffmpeg) || !File.Exists(ffprobe))
+    {
+        Console.WriteLine("   e2e skipped (ffmpeg not present)");
+        return;
+    }
+
+    var temp = Path.Combine(Path.GetTempPath(), "rshift-e2e-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(temp);
+    try
+    {
+        var input = Path.Combine(temp, "src.wav");
+        var ff = new FfmpegService(ffmpeg);
+        var (ok, err) = ff.RunAsync(
+            ["-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-ar", "44100", "-c:a", "pcm_s16le", input],
+            0, null).GetAwaiter().GetResult();
+        if (!ok) throw new InvalidOperationException($"make src failed: {err}");
+
+        var probe = new FfprobeService(ffprobe);
+        var info = probe.GetMediaInfoAsync(input).GetAwaiter().GetResult();
+        if (info == null) throw new InvalidOperationException("probe returned null");
+
+        var cases = new (string fmt, string bit, string rate, string ch, string dither, string outName)[]
+        {
+            ("WAV", AudioEditProfile.Bit16, AudioEditProfile.Keep, AudioEditProfile.Keep, AudioEditProfile.DitherAuto, "c1.wav"),
+            ("WAV", AudioEditProfile.Bit32Float, "96 kHz", AudioEditProfile.Keep, AudioEditProfile.DitherNone, "c2.wav"),
+            ("FLAC", AudioEditProfile.Bit16, AudioEditProfile.Keep, AudioEditProfile.Keep, AudioEditProfile.DitherAuto, "c3.flac"),
+            ("FLAC", AudioEditProfile.Bit24, "48 kHz", "Stereo", AudioEditProfile.DitherNone, "c4.flac"),
+            ("WAV", AudioEditProfile.Keep, "48 kHz", "Mono", AudioEditProfile.DitherAuto, "c5.wav"),
+        };
+        foreach (var (fmt, bit, rate, ch, dither, outName) in cases)
+        {
+            var output = Path.Combine(temp, outName);
+            var args = AudioEditProfile.BuildArguments(input, output, info, fmt, bit, rate, ch, dither);
+            var (s, e) = ff.RunAsync(args, info.DurationSeconds, null).GetAwaiter().GetResult();
+            if (!s || !File.Exists(output))
+                throw new InvalidOperationException($"{fmt}/{bit}/{rate}/{ch}/{dither} FAILED: {e}");
+            Console.WriteLine($"   e2e ok: {outName}");
+        }
+    }
+    finally
+    {
+        Directory.Delete(temp, true);
+    }
 }
 
 static void Equal<T>(T expected, T actual)

@@ -290,6 +290,7 @@ public class ConvertViewModel : BaseViewModel
 
                 var (ext, argsList) = BuildArgumentsList(
                     file.FilePath,
+                    info,
                     SelectedFormat,
                     EncodeMode,
                     HwEncoder,
@@ -369,6 +370,7 @@ public class ConvertViewModel : BaseViewModel
 
     private static (string ext, List<string> args) BuildArgumentsList(
         string inputPath,
+        MediaInfo? info,
         string format,
         string encodeMode,
         string hwEncoder,
@@ -383,7 +385,9 @@ public class ConvertViewModel : BaseViewModel
         if (encodeMode == "非圧縮コピー (-c copy)")
         {
             var copyExt = FormatToExt(format);
-            return (copyExt, ["-i", inputPath, "-c", "copy"]);
+            if (CanCopyRemux(info, format))
+                return (copyExt, ["-i", inputPath, "-c", "copy"]);
+            Log.Info($"Copy remux not possible for {inputPath} -> {format}; using normal encode.");
         }
 
         var audioOnlyFormats = new HashSet<string>
@@ -425,8 +429,8 @@ public class ConvertViewModel : BaseViewModel
             var quality = encodeMode == "最高品質" ? 0 : crf;
             var list = new List<string> { "-i", inputPath, "-c:v", vc };
             list.AddRange(MediaEncodingProfile.GetVideoQualityArguments(vc, quality));
-            list.AddRange(["-c:a", ac]);
-            if (subtitleMode == "削除 (-sn)")
+list.AddRange(["-c:a", ac]);
+            if (subtitleMode == "削除 (-sn)" || !SubtitleCopySafe(format))
                 list.Add("-sn");
             else
                 list.AddRange(["-c:s", "copy"]);
@@ -471,6 +475,34 @@ public class ConvertViewModel : BaseViewModel
             "avif" => (".avif", ["-y", "-i", inputPath, "-c:v", "libaom-av1"]),
             "tiff" => (".tiff", ["-y", "-i", inputPath]),
             _ => (".mp4", ["-i", inputPath, "-c:v", "libopenh264", "-q:v", Math.Clamp(crf, 1, 31).ToString(), "-c:a", "aac"]),
+        };
+    }
+
+    private static bool SubtitleCopySafe(string format) => format is "mkv" or "mov";
+
+    internal static bool CanCopyRemux(MediaInfo? info, string format)
+    {
+        if (info == null)
+            return false;
+        var vc = info.VideoCodec;
+        var ac = info.AudioCodec;
+        var hasVideo = !string.IsNullOrEmpty(vc);
+        var hasAudio = !string.IsNullOrEmpty(ac);
+
+        return FormatToExt(format) switch
+        {
+            ".mp4" =>
+                hasVideo && vc is "h264" or "hevc" && (ac is "" or "aac" or "mp3" or "mp4a"),
+            ".mov" =>
+                hasVideo && vc is "h264" or "hevc" && (ac is "" or "aac" or "mp3" or "mp4a" or "pcm_s16le" or "pcm_s24le"),
+            ".mkv" => hasVideo && vc is "h264" or "hevc",
+            ".wav" => !hasVideo && hasAudio && ac.StartsWith("pcm_", StringComparison.Ordinal),
+            ".flac" => !hasVideo && ac == "flac",
+            ".mp3" => !hasVideo && ac == "mp3",
+            ".m4a" or ".aac" => !hasVideo && ac is "aac" or "mp3" or "mp4a",
+            ".opus" => !hasVideo && ac == "opus",
+            ".ogg" => !hasVideo && ac == "vorbis",
+            _ => false,
         };
     }
 

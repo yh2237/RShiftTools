@@ -75,4 +75,24 @@ public static class RegistryService
             }
         }
     }
+
+    public static string GetRegistrationState()
+    {
+        try
+        {
+            if (
+                Registry.CurrentUser.OpenSubKey(
+                    $@"Software\Classes\*\shell\{AppStrings.AppName}"
+                ) != null
+            )
+                return "現在のユーザーのみ";
+            if (Registry.ClassesRoot.OpenSubKey($@"*\shell\{AppStrings.AppName}") != null)
+                return "すべてのユーザー";
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to read context menu state: {ex.Message}");
+        }
+        return "表示しない";
+    }
 }

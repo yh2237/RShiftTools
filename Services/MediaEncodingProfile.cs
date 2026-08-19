@@ -36,6 +36,10 @@ internal static class MediaEncodingProfile
     )
     {
         var ext = extension.ToLowerInvariant();
+        if (ext == ".wmv")
+            return "wmv2";
+        if (ext == ".flv")
+            return "flv";
         if (codecMode == AutoCodec)
             return GetResizeVideoCodec(ext, hardwareEncoder);
         if (codecMode == Vp9Codec)

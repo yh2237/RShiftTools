@@ -71,13 +71,23 @@ public partial class CutDialog : Window
 
     private async Task InitializePreviewAsync()
     {
-        await _vm.InitAsync();
-        UpdateMarkers();
+        try
+        {
+            await _vm.InitAsync();
+            UpdateMarkers();
 
-        if (_vm.IsPreviewAvailable)
+            if (_vm.IsPreviewAvailable)
+            {
+                _mediaReady = false;
+                MediaPlayer.Source = new Uri(_vm.File.FilePath);
+            }
+        }
+        catch (Exception ex)
         {
             _mediaReady = false;
-            MediaPlayer.Source = new Uri(_vm.File.FilePath);
+            _playWhenReady = false;
+            PreviewUnavailableMsg.Text = $"プレビュー読み込み失敗\n{ex.Message}";
+            PreviewUnavailableMsg.Visibility = Visibility.Visible;
         }
     }
 

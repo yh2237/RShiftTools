@@ -120,7 +120,7 @@ public class FfprobeService
         return ParseMediaInfo(filePath, json);
     }
 
-    private static MediaInfo? ParseMediaInfo(string filePath, string json)
+    internal static MediaInfo? ParseMediaInfo(string filePath, string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -303,7 +303,7 @@ public class FfprobeService
     {
         if (!element.TryGetProperty(propertyName, out var value))
             return 0;
-        if (value.TryGetInt32(out var number))
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
             return number;
         return value.ValueKind == JsonValueKind.String
             && int.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out number)

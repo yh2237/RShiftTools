@@ -24,7 +24,7 @@ public class SettingsViewModel : BaseViewModel
     public ObservableCollection<string> ContextMenuModes { get; } =
     ["表示しない", "現在のユーザーのみ", "すべてのユーザー"];
 
-    private string _contextMenuMode = "表示しない";
+    private string _contextMenuMode = RegistryService.GetRegistrationState();
     public string ContextMenuMode
     {
         get => _contextMenuMode;
